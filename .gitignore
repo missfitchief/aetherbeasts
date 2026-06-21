@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.log
+.env
+.DS_Store
+
+# Source engine used only as an asset/data reference; not part of the game.
+tools/_engine/

@@ -1,0 +1,413 @@
+{
+  "sprites": {
+    "mon_drachnid": {
+      "category": "mon",
+      "w": 128,
+      "h": 128,
+      "frames": 1,
+      "fps": 15,
+      "path": "mon/mon_drachnid.png"
+    },
+    "mon_charachne": {
+      "category": "mon",
+      "w": 128,
+      "h": 128,
+      "frames": 1,
+      "fps": 15,
+      "path": "mon/mon_charachne.png"
+    },
+    "mon_plaugspout": {
+      "category": "mon",
+      "w": 128,
+      "h": 128,
+      "frames": 1,
+      "fps": 15,
+      "path": "mon/mon_plaugspout.png"
+    },
+    "mon_flowrath": {
+      "category": "mon",
+      "w": 128,
+      "h": 128,
+      "frames": 1,
+      "fps": 15,
+      "path": "mon/mon_flowrath.png"
+    },
+    "mon_draquatic": {
+      "category": "mon",
+      "w": 128,
+      "h": 128,
+      "frames": 1,
+      "fps": 15,
+      "path": "mon/mon_draquatic.png"
+    },
+    "mon_leviocean": {
+      "category": "mon",
+      "w": 128,
+      "h": 128,
+      "frames": 1,
+      "fps": 15,
+      "path": "mon/mon_leviocean.png"
+    },
+    "mon_grodent": {
+      "category": "mon",
+      "w": 128,
+      "h": 128,
+      "frames": 1,
+      "fps": 15,
+      "path": "mon/mon_grodent.png"
+    },
+    "mon_ratssive": {
+      "category": "mon",
+      "w": 128,
+      "h": 128,
+      "frames": 1,
+      "fps": 15,
+      "path": "mon/mon_ratssive.png"
+    },
+    "mon_duvan": {
+      "category": "mon",
+      "w": 128,
+      "h": 128,
+      "frames": 1,
+      "fps": 15,
+      "path": "mon/mon_duvan.png"
+    },
+    "mon_pidgreat": {
+      "category": "mon",
+      "w": 128,
+      "h": 128,
+      "frames": 1,
+      "fps": 15,
+      "path": "mon/mon_pidgreat.png"
+    },
+    "mon_jestar": {
+      "category": "mon",
+      "w": 128,
+      "h": 128,
+      "frames": 1,
+      "fps": 15,
+      "path": "mon/mon_jestar.png"
+    },
+    "mon_cardemon": {
+      "category": "mon",
+      "w": 128,
+      "h": 128,
+      "frames": 1,
+      "fps": 15,
+      "path": "mon/mon_cardemon.png"
+    },
+    "mon_moldole": {
+      "category": "mon",
+      "w": 128,
+      "h": 128,
+      "frames": 1,
+      "fps": 15,
+      "path": "mon/mon_moldole.png"
+    },
+    "mon_shroomole": {
+      "category": "mon",
+      "w": 128,
+      "h": 128,
+      "frames": 1,
+      "fps": 15,
+      "path": "mon/mon_shroomole.png"
+    },
+    "mon_spookshroom": {
+      "category": "mon",
+      "w": 64,
+      "h": 64,
+      "frames": 1,
+      "fps": 15,
+      "path": "mon/mon_spookshroom.png"
+    },
+    "mon_wraithmanita": {
+      "category": "mon",
+      "w": 128,
+      "h": 128,
+      "frames": 1,
+      "fps": 15,
+      "path": "mon/mon_wraithmanita.png"
+    },
+    "ui_catchball": {
+      "category": "ui",
+      "w": 20,
+      "h": 20,
+      "frames": 1,
+      "fps": 15,
+      "path": "ui/ui_catchball.png"
+    },
+    "ui_forcefield": {
+      "category": "ui",
+      "w": 112,
+      "h": 112,
+      "frames": 1,
+      "fps": 15,
+      "path": "ui/ui_forcefield.png"
+    },
+    "ui_ailments": {
+      "category": "ui",
+      "w": 16,
+      "h": 16,
+      "frames": 7,
+      "fps": 15,
+      "path": "ui/ui_ailments/",
+      "sheet": false
+    },
+    "ui_messagebox": {
+      "category": "ui",
+      "w": 48,
+      "h": 48,
+      "frames": 1,
+      "fps": 15,
+      "path": "ui/ui_messagebox.png"
+    },
+    "fx_fire": {
+      "category": "fx",
+      "w": 32,
+      "h": 48,
+      "frames": 4,
+      "fps": 12,
+      "path": "fx/fx_fire/",
+      "sheet": false
+    },
+    "fx_leaf": {
+      "category": "fx",
+      "w": 12,
+      "h": 12,
+      "frames": 1,
+      "fps": 15,
+      "path": "fx/fx_leaf.png"
+    },
+    "fx_bubble": {
+      "category": "fx",
+      "w": 16,
+      "h": 16,
+      "frames": 1,
+      "fps": 15,
+      "path": "fx/fx_bubble.png"
+    },
+    "fx_star": {
+      "category": "fx",
+      "w": 46,
+      "h": 52,
+      "frames": 3,
+      "fps": 8,
+      "path": "fx/fx_star/",
+      "sheet": false
+    },
+    "fx_wind": {
+      "category": "fx",
+      "w": 128,
+      "h": 128,
+      "frames": 1,
+      "fps": 15,
+      "path": "fx/fx_wind.png"
+    },
+    "fx_sand": {
+      "category": "fx",
+      "w": 56,
+      "h": 36,
+      "frames": 1,
+      "fps": 15,
+      "path": "fx/fx_sand.png"
+    },
+    "fx_ghost": {
+      "category": "fx",
+      "w": 42,
+      "h": 57,
+      "frames": 1,
+      "fps": 15,
+      "path": "fx/fx_ghost.png"
+    },
+    "fx_spore": {
+      "category": "fx",
+      "w": 12,
+      "h": 12,
+      "frames": 1,
+      "fps": 15,
+      "path": "fx/fx_spore.png"
+    },
+    "tiles_outdoors": {
+      "category": "world",
+      "w": 320,
+      "h": 256,
+      "frames": 1,
+      "fps": 15,
+      "path": "world/tiles_outdoors.png"
+    },
+    "tiles_indoors": {
+      "category": "world",
+      "w": 320,
+      "h": 256,
+      "frames": 1,
+      "fps": 15,
+      "path": "world/tiles_indoors.png"
+    },
+    "char_player_sheet": {
+      "category": "char",
+      "w": 64,
+      "h": 64,
+      "frames": 1,
+      "fps": 15,
+      "path": "char/char_player_sheet.png"
+    },
+    "char_professor_sheet": {
+      "category": "char",
+      "w": 64,
+      "h": 64,
+      "frames": 1,
+      "fps": 15,
+      "path": "char/char_professor_sheet.png"
+    },
+    "char_hiker_sheet": {
+      "category": "char",
+      "w": 64,
+      "h": 64,
+      "frames": 1,
+      "fps": 15,
+      "path": "char/char_hiker_sheet.png"
+    },
+    "char_schoolgirl_sheet": {
+      "category": "char",
+      "w": 64,
+      "h": 64,
+      "frames": 1,
+      "fps": 15,
+      "path": "char/char_schoolgirl_sheet.png"
+    },
+    "char_guy_sheet": {
+      "category": "char",
+      "w": 64,
+      "h": 64,
+      "frames": 1,
+      "fps": 15,
+      "path": "char/char_guy_sheet.png"
+    },
+    "npc_shopkeeper": {
+      "category": "char",
+      "w": 16,
+      "h": 36,
+      "frames": 1,
+      "fps": 15,
+      "path": "char/npc_shopkeeper.png"
+    },
+    "npc_shrinemaiden": {
+      "category": "char",
+      "w": 16,
+      "h": 36,
+      "frames": 1,
+      "fps": 15,
+      "path": "char/npc_shrinemaiden.png"
+    }
+  },
+  "audio": {
+    "bgm_title": {
+      "kind": "music",
+      "path": "audio/bgm_title.ogg"
+    },
+    "bgm_forest": {
+      "kind": "music",
+      "path": "audio/bgm_forest.ogg"
+    },
+    "bgm_town": {
+      "kind": "music",
+      "path": "audio/bgm_town.ogg"
+    },
+    "bgm_battle": {
+      "kind": "music",
+      "path": "audio/bgm_battle.ogg"
+    },
+    "bgm_shrine": {
+      "kind": "music",
+      "path": "audio/bgm_shrine.ogg"
+    },
+    "jingle_win": {
+      "kind": "sfx",
+      "path": "audio/jingle_win.ogg"
+    },
+    "jingle_levelup": {
+      "kind": "sfx",
+      "path": "audio/jingle_levelup.ogg"
+    },
+    "jingle_evolve": {
+      "kind": "sfx",
+      "path": "audio/jingle_evolve.ogg"
+    },
+    "jingle_heal": {
+      "kind": "sfx",
+      "path": "audio/jingle_heal.wav"
+    },
+    "jingle_battle_intro": {
+      "kind": "sfx",
+      "path": "audio/jingle_battle_intro.ogg"
+    },
+    "sfx_ok": {
+      "kind": "sfx",
+      "path": "audio/sfx_ok.wav"
+    },
+    "sfx_move": {
+      "kind": "sfx",
+      "path": "audio/sfx_move.wav"
+    },
+    "sfx_buzzer": {
+      "kind": "sfx",
+      "path": "audio/sfx_buzzer.wav"
+    },
+    "sfx_tackle": {
+      "kind": "sfx",
+      "path": "audio/sfx_tackle.wav"
+    },
+    "sfx_bite": {
+      "kind": "sfx",
+      "path": "audio/sfx_bite.wav"
+    },
+    "sfx_fireball": {
+      "kind": "sfx",
+      "path": "audio/sfx_fireball.wav"
+    },
+    "sfx_bubble": {
+      "kind": "sfx",
+      "path": "audio/sfx_bubble.wav"
+    },
+    "sfx_leaf": {
+      "kind": "sfx",
+      "path": "audio/sfx_leaf.wav"
+    },
+    "sfx_magicstar": {
+      "kind": "sfx",
+      "path": "audio/sfx_magicstar.wav"
+    },
+    "sfx_sand": {
+      "kind": "sfx",
+      "path": "audio/sfx_sand.wav"
+    },
+    "sfx_damage": {
+      "kind": "sfx",
+      "path": "audio/sfx_damage.wav"
+    },
+    "sfx_catch_start": {
+      "kind": "sfx",
+      "path": "audio/sfx_catch_start.wav"
+    },
+    "sfx_catch_roll": {
+      "kind": "sfx",
+      "path": "audio/sfx_catch_roll.wav"
+    },
+    "sfx_catch_success": {
+      "kind": "sfx",
+      "path": "audio/sfx_catch_success.wav"
+    },
+    "sfx_catch_fail": {
+      "kind": "sfx",
+      "path": "audio/sfx_catch_fail.wav"
+    },
+    "sfx_heal": {
+      "kind": "sfx",
+      "path": "audio/sfx_heal.wav"
+    },
+    "sfx_purchase": {
+      "kind": "sfx",
+      "path": "audio/sfx_purchase.wav"
+    }
+  }
+}

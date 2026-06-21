@@ -1,0 +1,28 @@
+{
+  "name": "aetherbeasts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Aetherbeasts — original 2D top-down monster-collector (Phase 0: fully playable core, no crypto).",
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c blue,green \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "npm -w @aether/server run dev",
+    "dev:client": "npm -w client run dev",
+    "dev:client-only": "npm -w client run dev",
+    "build": "npm -w shared run build && npm -w client run build",
+    "start": "npm -w @aether/server run start",
+    "test": "npm -w shared run test",
+    "test:server": "node --import tsx server/test/pvp.e2e.ts",
+    "typecheck": "npm -w shared run typecheck && npm -w @aether/server run typecheck && npm -w client run typecheck",
+    "assets": "node tools/extract-assets.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "typescript": "^5.5.4"
+  }
+}

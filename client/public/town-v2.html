@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Aether Town — v2 render</title>
+<style>
+  /* Fill the window, dark letterbox, no smoothing anywhere. */
+  html, body { margin: 0; height: 100%; background: #0c1410; overflow: hidden; }
+  #screen {
+    display: block;
+    image-rendering: pixelated;            /* crisp upscale */
+    image-rendering: crisp-edges;
+    position: absolute; inset: 0; margin: auto;
+  }
+</style>
+</head>
+<body>
+<canvas id="screen"></canvas>
+<script>
+"use strict";
+/* =========================================================================
+   AETHER TOWN — single-file procedural GBA-era town renderer.
+   Everything is drawn in code (no images). Internal pixel buffer is scaled
+   up by an integer factor with smoothing OFF so pixels stay sharp.
+   Edit SEED to reshuffle the scattered grass/flowers; edit MAP / PROPS to
+   change the layout.
+   ========================================================================= */
+
+const SEED = 1337;            // <- change me to reshuffle deterministic scatter
+const TILE = 16;              // 16x16 tiles, Gen-3 style
+const MAPW = 30, MAPH = 18;   // town size in tiles
+const IW = MAPW * TILE, IH = MAPH * TILE;   // internal resolution: 480 x 288
+
+/* ---- seeded RNG (mulberry32) — deterministic so scatter is stable ---- */
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* ---- palette: 2–3 tones per material (base / light / dark) ---- */
+const C = {
+  grass: '#7ec850', grassDk: '#5fae3a', grassLt: '#9bdc6e',
+  path: '#d8b878', pathDk: '#c4a35f', edge: '#b9924f',
+  water: '#5a9fd4', waterLt: '#8fc4e8', waterDk: '#3f7fb8', shore: '#9c6b3f', shoreLt: '#b5834f',
+  dirt: '#c7a06a', dirtDk: '#a8814d',
+  // blue-roof cabin
+  roofB: '#5aa8c0', roofBLt: '#7fc6da', roofBDk: '#3d8298',
+  log: '#b07c4a', logLt: '#c89a68', logDk: '#8a5a2e',
+  // green-roof house
+  roofG: '#3f9e7a', roofGLt: '#5cc096', roofGDk: '#2d7558',
+  tanWall: '#cdab78', tanWallDk: '#a8824f', tanWallLt: '#e0c596',
+  // shared building bits
+  doorR: '#b5402a', doorRDk: '#8c2d1c', doorB: '#3a6ea5', doorBDk: '#2a4f78',
+  knob: '#ffd34e', glass: '#bfe6f7', glassDk: '#8fc4e8', frame: '#ffffff',
+  grey: '#4a4a4a', greyLt: '#6e6e6e', brick: '#a85a3c', brickLt: '#c47452',
+  // trees / nature
+  treeDk: '#2f6b39', treeMd: '#3f8a4a', treeLt: '#63b266', treeHi: '#8fd07c',
+  trunk: '#6b4a2a', trunkDk: '#4f3620',
+  fence: '#c9a86a', fenceDk: '#9c7f48', fenceLt: '#e0c694',
+  pole: '#8a8f99', poleDk: '#5a5f68', lampHead: '#3a3d44', glow: '#ffe79a',
+  sign: '#8a6038', signDk: '#5f3f22',
+  rock: '#a7adb6', rockDk: '#777d86',
+  crate: '#b58a52', crateDk: '#8a6638',
+  flW: '#ffffff', flP: '#ff9ec4', flC: '#ffd34e',
+  outline: '#27331f', outlineB: '#23323a',
+  shadow: 'rgba(0,0,0,0.16)',
+  // trainers
+  skin: '#f1c49a', hairDk: '#2b2b2b', hairBl: '#d8a martin', shirtDk: '#3c4a6e',
+  pink: '#e879a8', pinkDk: '#c25a8a', pants: '#3a3a46', shoe: '#222',
+  tagBg: '#f4f4f4', tagTx: '#202020',
+  hud: '#cfe6c8', chatBg: 'rgba(12,18,28,0.82)', chatLine: '#9fb0c8',
+};
+C.hairBl = '#d8a24a'; // fix typo above
+
+/* =========================================================================
+   MAP — data-driven. '.' grass, '#' path, '~' water, ',' dirt patch.
+   Built in code so the pond can be an organic shape.
+   ========================================================================= */
+const map = Array.from({ length: MAPH }, () => Array(MAPW).fill('.'));
+const setT = (x, y, t) => { if (x >= 0 && x < MAPW && y >= 0 && y < MAPH) map[y][x] = t; };
+const rectT = (x0, y0, w, h, t) => { for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) setT(x, y, t); };
+
+// road network: a vertical avenue crossing a horizontal street -> 4-way junction
+rectT(13, 0, 3, MAPH, '#');     // vertical path (3 wide)
+rectT(0, 8, MAPW, 2, '#');      // horizontal path (2 tall)
+
+// pond — irregular organic blob in the top-left quadrant
+const POND = [
+  [3,1],[4,1],[5,1],[6,1],[7,1],
+  [2,2],[3,2],[4,2],[5,2],[6,2],[7,2],[8,2],
+  [2,3],[3,3],[4,3],[5,3],[6,3],[7,3],[8,3],[9,3],
+  [3,4],[4,4],[5,4],[6,4],[7,4],[8,4],
+  [4,5],[5,5],[6,5],[7,5],
+];
+POND.forEach(([x, y]) => setT(x, y, '~'));
+
+// small dirt patches the two houses sit on
+rectT(20, 4, 6, 2, ',');   // under the blue cabin (right)
+rectT(2, 13, 5, 2, ',');   // under the green house (left)
+
+const tileAt = (x, y) => (x < 0 || y < 0 || x >= MAPW || y >= MAPH) ? '.' : map[y][x];
+
+/* =========================================================================
+   PROPS — drawn on top of tiles, y-sorted by their base so things overlap
+   correctly. Coords are in TILES (px = tile*16); each drawer is pixel-art.
+   ========================================================================= */
+const PROPS = [
+  // --- houses ---
+  { t: 'houseGreen', x: 2,  y: 14 },                 // far-left, faces the street
+  { t: 'houseBlue',  x: 22, y: 5  },                 // right side cabin
+
+  // --- fences: pond enclosure ---
+  ...fenceRun(2, 6, 9, 6),                            // south edge of pond yard
+  ...fenceRun(10, 1, 10, 6),                          // east edge of pond yard
+  // --- fences: blue cabin yard ---
+  ...fenceRun(19, 7, 27, 7),
+  ...fenceRun(27, 2, 27, 7),
+  // --- fences: green house plot ---
+  ...fenceRun(1, 16, 7, 16),
+  ...fenceRun(7, 11, 7, 16),
+
+  // --- lamps + signpost near the cabin door and the junction ---
+  { t: 'lamp', x: 19, y: 7 },
+  { t: 'sign', x: 25, y: 7 },
+  { t: 'lamp', x: 12, y: 7 },
+  { t: 'lamp', x: 16, y: 10 },
+
+  // --- garden / crop rows in the lower corners ---
+  ...cropRows(1, 17, 5),
+  ...cropRows(25, 16, 4),
+
+  // --- props near the path ---
+  { t: 'crate', x: 17, y: 6 }, { t: 'crate', x: 18, y: 6 },
+  { t: 'mailbox', x: 21, y: 7 },
+  { t: 'stump', x: 11, y: 13 },
+  { t: 'rock', x: 9, y: 12 }, { t: 'rock', x: 24, y: 12 },
+
+  // --- two trainers at the central junction + a nametag ---
+  { t: 'trainer', x: 14.6, y: 11.4, hair: C.hairDk, shirt: C.shirtDk },
+  { t: 'trainer', x: 15.7, y: 11.4, hair: C.hairBl, shirt: C.pink, tag: 'Youngster Henry' },
+];
+
+// tree clumps + borders (added programmatically below, after RNG seeded)
+
+/* helper: a straight fence run (inclusive), returns prop objects */
+function fenceRun(x0, y0, x1, y1) {
+  const out = [];
+  if (y0 === y1) for (let x = x0; x <= x1; x++) out.push({ t: 'fence', x, y: y0 });
+  else for (let y = y0; y <= y1; y++) out.push({ t: 'fence', x: x0, y });
+  return out;
+}
+/* helper: little garden crop rows */
+function cropRows(x0, y0, w) {
+  const out = [];
+  for (let i = 0; i < w; i++) out.push({ t: 'crop', x: x0 + i, y: y0 });
+  return out;
+}
+
+/* =========================================================================
+   CANVAS / BUFFER
+   ========================================================================= */
+const screen = document.getElementById('screen');
+const sctx = screen.getContext('2d');
+const buf = document.createElement('canvas'); buf.width = IW; buf.height = IH;
+const b = buf.getContext('2d');
+b.imageSmoothingEnabled = false;
+
+let SCALE = 3, OX = 0, OY = 0;
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  SCALE = Math.max(1, Math.floor(Math.min(w / IW, h / IH)));   // integer scale = crisp
+  screen.width = IW * SCALE; screen.height = IH * SCALE;
+  screen.style.width = IW * SCALE + 'px'; screen.style.height = IH * SCALE + 'px';
+  sctx.imageSmoothingEnabled = false;
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ---- tiny pixel-drawing helpers (operate on the buffer ctx `b`) ---- */
+const px = (x, y, c) => { b.fillStyle = c; b.fillRect(x | 0, y | 0, 1, 1); };
+const fr = (x, y, w, h, c) => { b.fillStyle = c; b.fillRect(x | 0, y | 0, w | 0, h | 0); };
+function disc(cx, cy, r, c) {
+  b.fillStyle = c;
+  for (let yy = -r; yy <= r; yy++) for (let xx = -r; xx <= r; xx++)
+    if (xx * xx + yy * yy <= r * r) b.fillRect((cx + xx) | 0, (cy + yy) | 0, 1, 1);
+}
+
+/* =========================================================================
+   TILE RENDERERS — drawTile() dispatches by type and autotiles path/water
+   edges from neighbours so the road and pond read organically.
+   ========================================================================= */
+function drawTile(type, tx, ty, rng) {
+  const X = tx * TILE, Y = ty * TILE;
+  // grass underlies everything (paths/dirt sit on top, water replaces it)
+  drawGrass(X, Y, rng);
+  if (type === '#') drawPath(X, Y, tx, ty);
+  else if (type === ',') drawDirt(X, Y, tx, ty, rng);
+  else if (type === '~') drawWater(X, Y, tx, ty);
+}
+
+function drawGrass(X, Y, rng) {
+  fr(X, Y, TILE, TILE, C.grass);
+  // sparse 2x2 darker blades + occasional lighter tuft — lightly textured, no banding
+  for (let i = 0; i < 5; i++) {
+    const x = X + (rng() * TILE | 0), y = Y + (rng() * TILE | 0);
+    px(x, y, C.grassDk); if (rng() < 0.5) px(x, y + 1, C.grassDk);
+  }
+  if (rng() < 0.5) { const x = X + (rng() * (TILE - 2) | 0), y = Y + (rng() * (TILE - 2) | 0); fr(x, y, 2, 1, C.grassLt); }
+}
+
+function drawPath(X, Y, tx, ty) {
+  fr(X, Y, TILE, TILE, C.path);
+  // subtle interior speckle
+  for (let i = 0; i < 3; i++) px(X + (hash(tx, ty, i) * TILE | 0), Y + (hash(ty, tx, i + 5) * TILE | 0), C.pathDk);
+  // dithered brown edge where the path meets grass (per side)
+  const g = (x, y) => tileAt(x, y) !== '#' && tileAt(x, y) !== ',';
+  if (g(tx, ty - 1)) dither(X, Y, TILE, 2, C.edge);            // top
+  if (g(tx, ty + 1)) dither(X, Y + TILE - 2, TILE, 2, C.edge); // bottom
+  if (g(tx - 1, ty)) ditherV(X, Y, 2, TILE, C.edge);           // left
+  if (g(tx + 1, ty)) ditherV(X + TILE - 2, Y, 2, TILE, C.edge);// right
+}
+
+function drawDirt(X, Y, tx, ty, rng) {
+  fr(X, Y, TILE, TILE, C.dirt);
+  for (let i = 0; i < 4; i++) px(X + (rng() * TILE | 0), Y + (rng() * TILE | 0), C.dirtDk);
+}
+
+function drawWater(X, Y, tx, ty) {
+  fr(X, Y, TILE, TILE, C.water);
+  // diagonal wavy ripple bands (animated by WAVE phase) — lighter & darker
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const d = (x + y + ((tx + ty) * 4)) ;
+    const s = Math.sin((d + WAVE) * 0.5);
+    if (s > 0.75) px(X + x, Y + y, C.waterLt);
+    else if (s < -0.75) px(X + x, Y + y, C.waterDk);
+  }
+  // organic muddy shoreline: brown dither where this water tile meets grass
+  const land = (x, y) => tileAt(x, y) !== '~';
+  if (land(tx, ty - 1)) { dither(X, Y, TILE, 2, C.shore); dither(X, Y + 2, TILE, 1, C.shoreLt); }
+  if (land(tx, ty + 1)) { dither(X, Y + TILE - 2, TILE, 2, C.shore); }
+  if (land(tx - 1, ty)) { ditherV(X, Y, 2, TILE, C.shore); }
+  if (land(tx + 1, ty)) { ditherV(X + TILE - 2, Y, 2, TILE, C.shore); }
+}
+
+/* deterministic 0..1 hash for tile speckle */
+function hash(a, b2, s) { let h = (a * 374761393 + b2 * 668265263 + s * 2246822519) >>> 0; h = (h ^ (h >>> 13)) * 1274126177 >>> 0; return (h & 0xffff) / 0xffff; }
+/* checkerboard-ish dither bands (organic edges) */
+function dither(x, y, w, h, c) { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (((i + j) & 1) === 0 || Math.random() < 0) if ((i + j + x + y) % 2 === 0) px(x + i, y + j, c); }
+function ditherV(x, y, w, h, c) { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if ((i + j + x + y) % 2 === 0) px(x + i, y + j, c); }
+
+/* =========================================================================
+   PROP RENDERERS — each draws a pixel-art object at a tile anchor.
+   Anchor (x,y) is the object's TOP-LEFT tile unless noted.
+   ========================================================================= */
+function drawProp(p) {
+  const X = Math.round(p.x * TILE), Y = Math.round(p.y * TILE);
+  switch (p.t) {
+    case 'houseBlue': houseBlue(X, Y); break;
+    case 'houseGreen': houseGreen(X, Y); break;
+    case 'tree': tree(X, Y, p.s || 0); break;
+    case 'fence': fence(X, Y); break;
+    case 'lamp': lamp(X, Y); break;
+    case 'sign': sign(X, Y); break;
+    case 'flower': flower(X, Y, p.c); break;
+    case 'stump': stump(X, Y); break;
+    case 'rock': rock(X, Y); break;
+    case 'crate': crate(X, Y); break;
+    case 'crop': crop(X, Y); break;
+    case 'mailbox': mailbox(X, Y); break;
+    case 'trainer': trainer(X, Y, p.hair, p.shirt, p.tag); break;
+  }
+}
+/* base row (for y-sorting): bottom of the object in tiles */
+function propBase(p) {
+  if (p.t === 'houseBlue') return p.y + 5;
+  if (p.t === 'houseGreen') return p.y + 4;
+  if (p.t === 'tree') return p.y + 3;
+  return p.y + 1;
+}
+
+/* ---- soft shadow ellipse under objects ---- */
+function shadowEll(cx, by, w) {
+  b.fillStyle = C.shadow;
+  for (let yy = -2; yy <= 2; yy++) for (let xx = -w; xx <= w; xx++)
+    if ((xx * xx) / (w * w) + (yy * yy) / 4 <= 1) b.fillRect((cx + xx) | 0, (by + yy) | 0, 1, 1);
+}
+/* outline a region by tracing transparent->opaque edges is overkill here;
+   each sprite paints its own 1px dark border explicitly. */
+
+/* ----- HOUSE 1: blue-roof log cabin (steep double-gable A-frame) ----- */
+function houseBlue(X, Y) {
+  const w = 5 * TILE, h = 5 * TILE;     // 80 x 80 footprint
+  shadowEll(X + w / 2, Y + h - 2, w * 0.42);
+  // log-cabin walls
+  const wallY = Y + 34, wallH = h - 34 - 2;
+  fr(X + 6, wallY, w - 12, wallH, C.log);
+  fr(X + 6, wallY, w - 12, 2, C.logLt);
+  fr(X + 6, Y + h - 4, w - 12, 2, C.logDk);
+  for (let yy = wallY + 5; yy < Y + h - 4; yy += 6) fr(X + 7, yy, w - 14, 1, C.logDk); // horizontal plank seams
+  // 2-pane window with white frame + light-blue glass
+  win(X + 12, wallY + 8, 16, 12);
+  // red/orange door with yellow knob
+  door(X + w / 2 - 7, Y + h - 22, 14, 20, C.doorR, C.doorRDk);
+  px(X + w / 2 + 3, Y + h - 11, C.knob); px(X + w / 2 + 3, Y + h - 12, C.knob);
+  // steep teal-blue double-gable A-frame roof
+  const peakY = Y + 2;
+  for (let yy = 0; yy < 34; yy++) {
+    const f = yy / 33, hw = Math.round(6 + f * (w / 2 - 4));
+    const cx = X + w / 2;
+    for (let x = cx - hw; x < cx + hw; x++) {
+      const col = x < cx - 2 ? C.roofB : x > cx + 2 ? C.roofBDk : C.roofBLt;
+      px(x, peakY + yy, col);
+    }
+    if (yy % 3 === 2) for (let x = cx - hw; x < cx + hw; x++) px(x, peakY + yy, 'rgba(0,0,0,0.12)'); // vertical plank shading via course lines
+  }
+  // vertical plank shading lines on the roof
+  for (let x = X + 10; x < X + w - 10; x += 5) for (let yy = 6; yy < 33; yy++) { const cx = X + w / 2, f = yy / 33, hw = Math.round(6 + f * (w / 2 - 4)); if (x > cx - hw && x < cx + hw) px(x, peakY + yy, 'rgba(0,0,0,0.10)'); }
+  fr(X + w / 2 - 1, peakY, 2, 33, C.roofBLt); // bright ridge highlight
+  // small dark attic vent
+  fr(X + w / 2 - 3, peakY + 20, 6, 5, C.outlineB); fr(X + w / 2 - 2, peakY + 21, 4, 3, C.roofBDk);
+  outlineBox(X + 6, wallY, w - 12, wallH);     // wall outline
+}
+
+/* ----- HOUSE 2: green-roof lab/house (lower pitch, chimney) ----- */
+function houseGreen(X, Y) {
+  const w = 5 * TILE, h = 4 * TILE;     // 80 x 64
+  shadowEll(X + w / 2, Y + h - 2, w * 0.42);
+  // tan plank walls
+  const wallY = Y + 26, wallH = h - 26 - 2;
+  fr(X + 5, wallY, w - 10, wallH, C.tanWall);
+  fr(X + 5, wallY, w - 10, 2, C.tanWallLt);
+  fr(X + 5, Y + h - 4, w - 10, 2, C.tanWallDk);
+  for (let yy = wallY + 5; yy < Y + h - 4; yy += 6) fr(X + 6, yy, w - 12, 1, C.tanWallDk);
+  // wide window
+  win(X + 10, wallY + 7, 20, 12);
+  // blue double-door + brick step
+  door(X + w / 2 - 8, Y + h - 22, 16, 20, C.doorB, C.doorBDk);
+  fr(X + w / 2 - 8, Y + h - 22, 1, 20, C.doorBDk); fr(X + w / 2, Y + h - 22, 1, 20, C.doorBDk); // centre split (double door)
+  fr(X + w / 2 - 10, Y + h - 3, 20, 3, C.brick); fr(X + w / 2 - 10, Y + h - 3, 20, 1, C.brickLt); // brick step
+  // chimney / box vent + brick stack (drawn before roof so roof tucks under)
+  fr(X + w - 20, Y + 1, 8, 12, C.grey); fr(X + w - 20, Y + 1, 8, 2, C.greyLt); fr(X + w - 13, Y + 1, 1, 12, C.outlineB);
+  fr(X + w - 21, Y, 10, 2, C.brick);
+  // lower-pitched green roof with vertical shading
+  const peakY = Y, roofH = 26;
+  for (let yy = 0; yy < roofH; yy++) {
+    const f = yy / (roofH - 1), inset = Math.round((1 - f) * (w * 0.18));
+    const left = X + 2 + inset, right = X + w - 2 - inset, cx = X + w / 2;
+    for (let x = left; x < right; x++) px(x, peakY + yy, x < cx ? (f < 0.4 ? C.roofGLt : C.roofG) : C.roofGDk);
+    if (yy % 3 === 2) for (let x = left; x < right; x++) px(x, peakY + yy, 'rgba(0,0,0,0.10)');
+  }
+  for (let x = X + 8; x < X + w - 8; x += 6) for (let yy = 2; yy < roofH; yy++) px(x, peakY + yy, 'rgba(0,0,0,0.08)'); // vertical shading
+  fr(X + 2, peakY + roofH - 2, w - 4, 2, C.roofGDk); // eave
+  outlineBox(X + 5, wallY, w - 10, wallH);
+}
+
+/* shared: window (white frame, 2-pane light-blue glass + shine) */
+function win(x, y, w, h) {
+  fr(x - 1, y - 1, w + 2, h + 2, C.frame);
+  fr(x, y, w, h, C.glassDk);
+  fr(x, y, w, Math.floor(h / 2), C.glass);
+  fr(x + 2, y + 2, 3, 2, '#ffffff');
+  fr(x + w / 2 | 0, y, 1, h, C.frame);   // mullion
+  outlineBox(x - 1, y - 1, w + 2, h + 2);
+}
+/* shared: door */
+function door(x, y, w, h, c, dk) {
+  fr(x, y, w, h, dk);
+  fr(x + 1, y + 1, w - 2, h - 1, c);
+  fr(x + 1, y + 1, w - 2, 1, 'rgba(255,255,255,0.25)');
+  fr(x - 1, y - 1, w + 2, 1, C.outlineB);
+}
+/* 1px dark outline around a box */
+function outlineBox(x, y, w, h) {
+  b.fillStyle = C.outline;
+  b.fillRect(x - 1, y - 1, w + 2, 1); b.fillRect(x - 1, y + h, w + 2, 1);
+  b.fillRect(x - 1, y - 1, 1, h + 2); b.fillRect(x + w, y - 1, 1, h + 2);
+}
+
+/* ----- round bushy tree ----- */
+function tree(X, Y, s) {
+  const cx = X + 13, by = Y + 3 * TILE;
+  shadowEll(cx, by - 1, 11);
+  fr(cx - 2, by - 11, 4, 9, C.trunk); fr(cx + 1, by - 11, 1, 9, C.trunkDk);
+  const base = by - 14;
+  disc(cx, base - 4, 11, C.treeDk);
+  disc(cx - 6, base, 7, C.treeDk); disc(cx + 6, base, 7, C.treeDk);
+  disc(cx, base - 6, 9, C.treeMd);
+  disc(cx - 4, base - 2, 6, C.treeMd); disc(cx + 4, base - 2, 6, C.treeMd);
+  disc(cx - 3, base - 7, 6, C.treeLt);            // top-left highlight
+  disc(cx - 5, base - 9, 3, C.treeHi);
+  // outline ring (sample the canopy silhouette cheaply: draw a darker ring)
+  for (let a = 0; a < 64; a++) { const an = a / 64 * Math.PI * 2; px(cx + Math.cos(an) * 12 | 0, base - 4 + Math.sin(an) * 12 | 0, C.outline); }
+}
+
+/* ----- post-and-rail fence ----- */
+function fence(X, Y) {
+  const y = Y + 6;
+  fr(X, y, TILE, 2, C.fence); fr(X, y, TILE, 1, C.fenceLt); fr(X, y + 4, TILE, 2, C.fenceDk);
+  fr(X + 2, Y + 3, 3, 11, C.fence); fr(X + 2, Y + 3, 1, 11, C.fenceLt); fr(X + 4, Y + 3, 1, 11, C.fenceDk);
+  fr(X + 11, Y + 3, 3, 11, C.fence); fr(X + 11, Y + 3, 1, 11, C.fenceLt); fr(X + 13, Y + 3, 1, 11, C.fenceDk);
+}
+
+/* ----- street lamp ----- */
+function lamp(X, Y) {
+  const cx = X + 8;
+  shadowEll(cx, Y + 15, 4);
+  fr(cx - 1, Y + 4, 2, 11, C.pole); fr(cx - 1, Y + 4, 1, 11, C.poleDk);
+  fr(cx - 3, Y, 6, 5, C.lampHead); fr(cx - 2, Y + 1, 4, 3, C.glow);
+  disc(cx, Y + 2, 3, 'rgba(255,231,154,0.25)');
+}
+
+/* ----- signpost ----- */
+function sign(X, Y) {
+  const cx = X + 8;
+  shadowEll(cx, Y + 15, 4);
+  fr(cx - 1, Y + 8, 2, 7, C.signDk);
+  fr(cx - 6, Y + 2, 12, 7, C.sign); fr(cx - 6, Y + 2, 12, 1, '#a87a48'); fr(cx - 6, Y + 8, 12, 1, C.signDk);
+  fr(cx - 4, Y + 4, 8, 1, C.signDk); fr(cx - 4, Y + 6, 6, 1, C.signDk);
+  outlineBox(cx - 6, Y + 2, 12, 7);
+}
+
+/* ----- flower cluster ----- */
+function flower(X, Y, c) {
+  const x = X + 4 + (Math.random() * 6 | 0), y = Y + 6 + (Math.random() * 6 | 0);
+  px(x, y, c); px(x + 1, y, c); px(x, y + 1, c); px(x + 1, y + 1, c); px(x, y, C.flC);
+}
+
+/* ----- tree stump ----- */
+function stump(X, Y) {
+  const cx = X + 8; shadowEll(cx, Y + 12, 5);
+  fr(cx - 4, Y + 5, 8, 6, C.trunk); fr(cx - 4, Y + 5, 8, 2, '#8a6238');
+  disc(cx, Y + 6, 2, '#a3784a'); px(cx, Y + 6, C.trunkDk);
+  outlineBox(cx - 4, Y + 5, 8, 6);
+}
+/* ----- rock ----- */
+function rock(X, Y) {
+  const cx = X + 8; shadowEll(cx, Y + 13, 5);
+  disc(cx, Y + 9, 5, C.rock); disc(cx - 1, Y + 8, 4, '#bcc2cb'); disc(cx + 2, Y + 11, 3, C.rockDk);
+  for (let a = 0; a < 40; a++) { const an = a / 40 * Math.PI * 2; px(cx + Math.cos(an) * 5 | 0, Y + 9 + Math.sin(an) * 5 | 0, C.outline); }
+}
+/* ----- crate ----- */
+function crate(X, Y) {
+  shadowEll(X + 8, Y + 14, 6);
+  fr(X + 3, Y + 4, 11, 10, C.crate); fr(X + 3, Y + 4, 11, 1, '#caa06a'); fr(X + 3, Y + 13, 11, 1, C.crateDk);
+  fr(X + 3, Y + 8, 11, 1, C.crateDk); fr(X + 8, Y + 4, 1, 10, C.crateDk);
+  outlineBox(X + 3, Y + 4, 11, 10);
+}
+/* ----- mailbox ----- */
+function mailbox(X, Y) {
+  const cx = X + 8; shadowEll(cx, Y + 15, 3);
+  fr(cx - 1, Y + 8, 2, 7, C.trunkDk);
+  fr(cx - 4, Y + 3, 8, 6, '#3a6ea5'); fr(cx - 4, Y + 3, 8, 1, '#5a8ec5'); fr(cx + 3, Y + 4, 1, 4, C.knob);
+  outlineBox(cx - 4, Y + 3, 8, 6);
+}
+/* ----- garden crop row ----- */
+function crop(X, Y) {
+  fr(X, Y + 8, TILE, 6, C.dirt); fr(X, Y + 8, TILE, 1, C.dirtDk);
+  for (let i = 1; i < TILE; i += 4) { fr(X + i, Y + 6, 1, 6, C.treeMd); fr(X + i, Y + 5, 1, 1, C.treeLt); }
+}
+
+/* ----- 16x24 top-down trainer (front-facing) + optional nametag ----- */
+function trainer(X, Y, hair, shirt, tag) {
+  shadowEll(X + 8, Y + 23, 5);
+  // legs
+  fr(X + 5, Y + 17, 3, 5, C.pants); fr(X + 8, Y + 17, 3, 5, C.pants);
+  fr(X + 5, Y + 22, 3, 2, C.shoe); fr(X + 8, Y + 22, 3, 2, C.shoe);
+  // torso
+  fr(X + 4, Y + 11, 8, 7, shirt); fr(X + 4, Y + 11, 8, 1, 'rgba(255,255,255,0.2)');
+  fr(X + 3, Y + 12, 2, 4, C.skin); fr(X + 11, Y + 12, 2, 4, C.skin); // arms
+  // head
+  fr(X + 4, Y + 4, 8, 7, C.skin);
+  fr(X + 4, Y + 3, 8, 3, hair); fr(X + 3, Y + 4, 1, 4, hair); fr(X + 12, Y + 4, 1, 4, hair); // hair
+  px(X + 6, Y + 8, '#3a2a1a'); px(X + 9, Y + 8, '#3a2a1a'); // eyes
+  outlineBox(X + 4, Y + 4, 8, 19);
+  // floating nametag
+  if (tag) {
+    b.font = '7px monospace'; const tw = b.measureText(tag).width + 6;
+    const tx = X + 8 - tw / 2, ty = Y - 9;
+    fr(tx, ty, tw, 9, C.tagBg); fr(tx, ty + 9, tw, 1, '#c8c8c8');
+    b.fillStyle = C.tagTx; b.textBaseline = 'top'; b.fillText(tag, tx + 3, ty + 1);
+  }
+}
+
+/* =========================================================================
+   SCATTER — deterministic trees / flowers placed with the seeded RNG.
+   ========================================================================= */
+function buildScatter(rng) {
+  const list = [];
+  const occupied = (x, y) => map[y] && (map[y][x] === '#' || map[y][x] === '~' || map[y][x] === ',');
+  // dense tree border framing the playable area
+  for (let x = 0; x < MAPW; x++) { if (rng() < 0.85) list.push({ t: 'tree', x, y: 0, s: 1 }); if (rng() < 0.8) list.push({ t: 'tree', x, y: MAPH - 1, s: 1 }); }
+  for (let y = 1; y < MAPH - 1; y++) { if (rng() < 0.8) list.push({ t: 'tree', x: 0, y, s: 1 }); if (rng() < 0.8) list.push({ t: 'tree', x: MAPW - 1, y, s: 1 }); }
+  // a couple of natural clumps
+  const clumps = [[10, 3], [27, 13], [9, 15], [20, 14]];
+  for (const [cx, cy] of clumps) for (let i = 0; i < 5; i++) {
+    const x = cx + (rng() * 4 - 2 | 0), y = cy + (rng() * 3 - 1 | 0);
+    if (!occupied(x, y) && x > 0 && x < MAPW - 1 && y > 0 && y < MAPH - 1) list.push({ t: 'tree', x, y, s: 1 });
+  }
+  // flowers near the paths
+  for (let i = 0; i < 40; i++) {
+    const x = rng() * MAPW | 0, y = rng() * MAPH | 0;
+    const nearPath = ['#'].includes(tileAt(x + 1, y)) || ['#'].includes(tileAt(x - 1, y)) || ['#'].includes(tileAt(x, y + 1)) || ['#'].includes(tileAt(x, y - 1));
+    if (!occupied(x, y) && nearPath) list.push({ t: 'flower', x, y, c: rng() < 0.5 ? C.flW : C.flP });
+  }
+  return list;
+}
+
+/* =========================================================================
+   HUD — decorative pixel MMO chrome.
+   ========================================================================= */
+function drawHUD(fps) {
+  b.font = '7px monospace'; b.textBaseline = 'top';
+  // top-left status
+  fr(2, 2, 150, 18, 'rgba(0,0,0,0.30)');
+  b.fillStyle = C.hud; b.fillText('FPS: ' + fps, 6, 3);
+  b.fillStyle = '#ffd34e'; b.fillText('World Blessing Active  x2 Exp', 6, 11);
+  // bottom-right chat box
+  const cw = 150, ch = 60, cxx = IW - cw - 3, cyy = IH - ch - 3;
+  fr(cxx, cyy, cw, ch, C.chatBg);
+  fr(cxx, cyy, cw, 9, 'rgba(40,60,90,0.9)');
+  b.fillStyle = '#cfe6ff'; b.fillText('English  Trade  Local  Clan', cxx + 4, cyy + 1);
+  const lines = ['Henry: welcome to town!', 'Mina: nice pond ✿', 'Henry: which roof u like?', 'you: comparing v1 vs v2…'];
+  b.fillStyle = C.chatLine;
+  lines.forEach((l, i) => b.fillText(l, cxx + 4, cyy + 12 + i * 9));
+}
+
+/* =========================================================================
+   RENDER LOOP
+   ========================================================================= */
+let WAVE = 0;            // water ripple phase
+let scatter = null;
+let lastT = performance.now(), frames = 0, fps = 0, fpsT = lastT;
+
+function render() {
+  const rng = mulberry32(SEED);                 // re-seed each frame -> stable scatter
+  if (!scatter) scatter = buildScatter(mulberry32(SEED ^ 0x9e3779b9));
+
+  // 1) tiles
+  for (let ty = 0; ty < MAPH; ty++) for (let tx = 0; tx < MAPW; tx++) drawTile(map[ty][tx], tx, ty, rng);
+
+  // 2) props (static placed + scattered), painter's order by base row
+  const all = PROPS.concat(scatter).slice().sort((a, p) => propBase(a) - propBase(p));
+  for (const p of all) drawProp(p);
+
+  // 3) HUD
+  drawHUD(fps);
+
+  // 4) blit buffer -> screen, integer-scaled, centred (crisp)
+  sctx.fillStyle = '#0c1410'; sctx.fillRect(0, 0, screen.width, screen.height);
+  sctx.imageSmoothingEnabled = false;
+  sctx.drawImage(buf, 0, 0, IW, IH, 0, 0, IW * SCALE, IH * SCALE);
+}
+
+function loop(t) {
+  WAVE = t * 0.004;
+  frames++; if (t - fpsT >= 500) { fps = Math.round(frames * 1000 / (t - fpsT)); frames = 0; fpsT = t; }
+  render();
+  requestAnimationFrame(loop);
+}
+render();                       // paint one frame immediately (don't wait for rAF)
+requestAnimationFrame(loop);    // then animate (ripples / FPS) while the tab is visible
+</script>
+</body>
+</html>

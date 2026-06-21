@@ -1,0 +1,35 @@
+# Render.com blueprint for the Aetherbeasts PvP server.
+# Deploy: push this repo to GitHub, then "New > Blueprint" on Render and point it
+# here. The server runs the workspace via tsx (no build step needed).
+#
+# After it deploys, set the client's VITE_SERVER_URL to the service URL and
+# rebuild the client (e.g. on Netlify/Vercel/static host).
+services:
+  - type: web
+    name: aetherbeasts-server
+    runtime: node
+    plan: starter # always-warm; do NOT use the free tier (it sleeps and drops live battles)
+    region: oregon
+    rootDir: .
+    buildCommand: npm install --include=dev
+    startCommand: npm run start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: CLIENT_ORIGIN
+        value: "*" # tighten to your client origin in production
+      - key: TOKEN_MODE
+        value: sim # flip to "devnet" + set AETHER_MINT once a devnet token exists
+      # - key: AETHER_MINT
+      #   value: "<your SPL mint address>"
+      # - key: DATABASE_URL    # optional Postgres for durable accounts
+      #   fromDatabase:
+      #     name: aetherbeasts-db
+      #     property: connectionString
+
+# Optional managed Postgres (uncomment + the DATABASE_URL above to persist accounts):
+# databases:
+#   - name: aetherbeasts-db
+#     plan: starter
