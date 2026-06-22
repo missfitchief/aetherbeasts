@@ -18,6 +18,7 @@
     "start": "npm -w @aether/server run start",
     "test": "npm -w shared run test",
     "test:server": "node --import tsx server/test/pvp.e2e.ts",
+    "test:auth": "node --import tsx server/test/wallet-auth.e2e.ts",
     "typecheck": "npm -w shared run typecheck && npm -w @aether/server run typecheck && npm -w client run typecheck",
     "assets": "node tools/extract-assets.mjs"
   },
