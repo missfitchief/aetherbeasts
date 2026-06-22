@@ -149,7 +149,17 @@ export function buildWorld(): WorldMap {
   };
   const fenceRow = (x0: number, x1: number, y: number) => { for (let x = x0; x <= x1; x++) obj('fence', x, y); };
   const fenceCol = (x: number, y0: number, y1: number) => { for (let y = y0; y <= y1; y++) obj('fence', x, y); };
-  const treeLine = (x0: number, x1: number, y: number) => { for (let x = x0; x <= x1; x++) if (rnd() < 0.8) treeAt(x, y); };
+  // A natural forest EDGE: stagger the trunk row by ±1 so canopies sit at varied
+  // heights (not one flat wall), let some trees sit a row deeper, and dot a little
+  // undergrowth at the base. Reads like the lip of a forest, not a fence of trees.
+  const treeEdge = (x0: number, x1: number, yBase: number) => {
+    for (let x = x0; x <= x1; x++) {
+      const row = yBase - (rnd() < 0.45 ? 1 : 0);
+      if (rnd() < 0.88) treeAt(x, row);
+      if (rnd() < 0.32) treeAt(x, row - 1);   // a second, deeper tree for depth
+      if (rnd() < 0.16) obj('bush', x, yBase); // low undergrowth softening the base
+    }
+  };
   const treeCluster = (cx: number, cy: number, n: number, spread: number) => {
     // scatter with a minimum trunk spacing so canopies don't merge into a blob
     const placed: [number, number][] = [];
@@ -202,8 +212,8 @@ export function buildWorld(): WorldMap {
   for (const lx of [6, 12, 18, 27, 33, 39]) obj('lamp', lx, 14);
   obj('lamp', 20, 6); obj('lamp', 20, 21);
   obj('sign', 20, 22);
-  // a tree line frames the south edge of town, funnelling you down the avenue to the route
-  treeLine(2, 18, 23); treeLine(25, 43, 23);
+  // a ragged forest edge frames the south of town, funnelling you down the avenue
+  treeEdge(2, 18, 23); treeEdge(25, 43, 23);
   pineAt(19, 6); pineAt(25, 6);   // specimen conifers flanking the avenue head
 
   // ===== WHISPERWOOD ROUTE (rows 24..56) =====

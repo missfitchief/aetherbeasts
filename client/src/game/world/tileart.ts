@@ -249,16 +249,13 @@ function rect(x: CanvasRenderingContext2D, px: number, py: number, w: number, h:
   x.fillStyle = c; x.fillRect(px, py, w, h);
 }
 
-// drifting ripple/sparkle overlay drawn over water for an animated shimmer
+// soft drifting ripple bands over water — calm, no harsh white sparkles
 function shimmerFrame(phase: number): HTMLCanvasElement {
   const { c, x } = cv(T, T);
-  x.fillStyle = 'rgba(190,228,247,0.5)';
-  const y1 = 3 + phase * 2;
-  for (let px = 2; px < 13; px++) if ((px + phase) % 4 < 2) set(x, px, y1, 'rgba(200,232,250,0.55)');
-  const y2 = 12 - phase;
-  for (let px = 4; px < 14; px++) if ((px + phase * 2) % 5 < 2) set(x, px, y2, 'rgba(150,205,238,0.45)');
-  const sp = [[5, 6], [10, 9], [7, 12]][phase % 3];
-  set(x, sp[0], sp[1], 'rgba(255,255,255,0.75)');
+  const y1 = 4 + phase * 2;
+  for (let px = 2; px < 14; px++) if ((px + phase) % 6 < 2) set(x, px, y1, 'rgba(198,230,248,0.26)');
+  const y2 = 11 - phase;
+  for (let px = 3; px < 13; px++) if ((px + phase * 2) % 7 < 2) set(x, px, y2, 'rgba(165,212,240,0.20)');
   return c;
 }
 
