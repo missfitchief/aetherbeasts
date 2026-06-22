@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useGame } from '../state/store.js';
 import { STARTERS } from '@aether/shared';
 import { MonImg } from './components.js';
-import { useNet, connectWallet } from '../net/net.js';
+import { useNet } from '../net/net.js';
 
 export function TitleScreen() {
   const save = useGame((s) => s.save);
@@ -59,13 +59,9 @@ export function TitleScreen() {
       <div className="title-net">
         <span className={'net-dot ' + status} />
         <span className="muted small">
-          {status === 'online' ? 'Arena online — PvP ready' : status === 'connecting' ? 'Connecting to arena…' : 'Arena offline (single-player ready)'}
+          {status === 'online' ? 'Arena online — PvP ready' : status === 'connecting' ? 'Connecting to arena…' : 'Arena offline — reconnecting…'}
         </span>
-        {short ? (
-          <span className="wallet-chip" title={wallet ?? ''}>🦊 {short}</span>
-        ) : (
-          <button className="btn ghost small" onClick={connectWallet}>🦊 Connect Phantom</button>
-        )}
+        {short && <span className="wallet-chip" title={wallet ?? ''}>🦊 {short}</span>}
       </div>
 
       <div className="muted small" style={{ marginTop: 14 }}>

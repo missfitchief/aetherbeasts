@@ -119,8 +119,10 @@ function ensureSocket(): Socket {
 
 function wire(s: Socket) {
   s.on('connect', () => {
-    const token = localStorage.getItem(TOKEN_KEY) || undefined;
-    s.emit('auth:guest', { token, name: useGame.getState().save?.playerName });
+    // Mandatory wallet login: only RESUME a prior session via a stored token.
+    // With no token we stay unauthenticated until the player connects Phantom.
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (token) s.emit('auth:guest', { token, name: useGame.getState().save?.playerName });
   });
   s.on('connect_error', () => useNet.setState({ status: 'offline' }));
   s.on('disconnect', () => useNet.setState({ status: 'offline' }));

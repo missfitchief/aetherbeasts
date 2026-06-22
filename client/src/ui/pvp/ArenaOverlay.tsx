@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getMove, getSpecies, statOf, TYPE_COLOR, type Creature } from '@aether/shared';
-import { useNet, findMatch, cancelMatch, submitMove, submitSwitch, forfeitMatch, leaveResult, connectWallet } from '../../net/net.js';
+import { useNet, findMatch, cancelMatch, submitMove, submitSwitch, forfeitMatch, leaveResult } from '../../net/net.js';
 import { useGame } from '../../state/store.js';
 import { MonImg, HpBar } from '../components.js';
 
@@ -17,7 +17,6 @@ export function ArenaOverlay() {
 function Lobby() {
   const status = useNet((s) => s.status);
   const profile = useNet((s) => s.profile);
-  const wallet = useNet((s) => s.wallet);
   const lobby = useNet((s) => s.lobby);
   const stake = useNet((s) => s.stake);
   const setArena = useNet((s) => s.setArena);
@@ -82,11 +81,6 @@ function Lobby() {
               onClick={() => findMatch(stake)}>
               Quick Match — stake {stake} ◈
             </button>
-            {!wallet && (
-              <button className="btn" title="Link your Solana wallet as your identity" onClick={connectWallet}>
-                🦊 Connect Phantom
-              </button>
-            )}
           </div>
         )}
 
