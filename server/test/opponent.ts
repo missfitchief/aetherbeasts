@@ -1,12 +1,13 @@
 /**
- * A headless auto-playing opponent for live client verification. Connects to a
- * running server, pushes a team, joins quick-match at the given stake, and plays
- * a damaging move every turn until the match ends. Then exits.
+ * A headless auto-playing opponent for live client verification. Authenticates
+ * with a fresh wallet (anonymous guests are disabled), pushes a team, joins
+ * quick-match at the given stake, and plays a damaging move every turn until the
+ * match ends. Then exits.
  *
  * Usage: node --import tsx server/test/opponent.ts <serverUrl> <stake>
  */
-import { io } from 'socket.io-client';
 import { newSave, createCreature, seededRng, type SaveData, type PvpBattleView } from '@aether/shared';
+import { walletConnect } from './_wallet.js';
 
 const URL = process.argv[2] || 'http://localhost:3001';
 const STAKE = Number(process.argv[3] || 50);
@@ -20,11 +21,10 @@ function team(): SaveData {
   return s;
 }
 
-const socket = io(URL, { transports: ['websocket'], forceNew: true });
+const { socket } = await walletConnect(URL);
 let view: PvpBattleView | null = null;
 
-socket.on('auth:ok', () => socket.emit('save:push', { save: team() }));
-socket.on('save:saved', () => socket.emit('match:find', { stake: STAKE }));
+socket.once('save:saved', () => socket.emit('match:find', { stake: STAKE }));
 socket.on('match:queued', () => console.log('[bot] queued at stake', STAKE));
 socket.on('match:found', (m: any) => console.log('[bot] matched vs', m.opponent));
 socket.on('battle:state', (v: PvpBattleView) => { view = v; });
@@ -40,5 +40,5 @@ socket.on('match:over', (mo: any) => {
 });
 socket.on('error', (e: any) => console.error('[bot] error:', e?.message));
 
-socket.emit('auth:guest', { name: 'RivalBot' });
+socket.emit('save:push', { save: team() });
 setTimeout(() => { console.error('[bot] timed out'); process.exit(1); }, 60_000);

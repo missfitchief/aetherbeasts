@@ -4,6 +4,8 @@ import type { SaveData, PublicProfile } from '@aether/shared';
 import { STARTING_CREDITS } from '@aether/shared';
 import { DATABASE_URL } from './config.js';
 
+const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // resume tokens expire after 30 days (sliding)
+
 /**
  * The persisted record for one player. `save` is the client-owned progression
  * blob (party/box/dex/aether/...). `credits` is the SERVER-AUTHORITATIVE wager
@@ -22,6 +24,7 @@ export interface PlayerRecord {
   wins: number;
   losses: number;
   lastDailyTopUp: number;
+  tokenExpiresAt: number; // resume token absolute expiry (sliding on each auth)
   createdAt: number;
   updatedAt: number;
 }
@@ -99,11 +102,20 @@ export class Store {
   }
   getByToken(token: string): PlayerRecord | null {
     const id = this.byToken.get(token);
-    return id ? this.byId.get(id) ?? null : null;
+    const rec = id ? this.byId.get(id) ?? null : null;
+    if (rec && rec.tokenExpiresAt && rec.tokenExpiresAt < Date.now()) return null; // expired — must re-sign
+    return rec;
   }
   getByWallet(wallet: string): PlayerRecord | null {
     const id = this.byWallet.get(wallet);
     return id ? this.byId.get(id) ?? null : null;
+  }
+  /** Slide the resume-token expiry forward (called on every successful auth). */
+  extendSession(id: string): void {
+    const rec = this.byId.get(id);
+    if (!rec) return;
+    rec.tokenExpiresAt = Date.now() + TOKEN_TTL_MS;
+    this.queuePersist(rec);
   }
 
   createGuest(name?: string): PlayerRecord {
@@ -120,6 +132,7 @@ export class Store {
       wins: 0,
       losses: 0,
       lastDailyTopUp: 0,
+      tokenExpiresAt: Date.now() + TOKEN_TTL_MS,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -129,9 +142,10 @@ export class Store {
   }
 
   /**
-   * Link a wallet to an EXISTING guest record in place, preserving its credits,
-   * save, and rating. Returns null if the guest is gone or already a wallet.
-   * (If the wallet already has its own account, the caller uses that instead.)
+   * Link a wallet to an EXISTING guest record in place, preserving its save and
+   * rating. Credits are capped at the wallet baseline so a Sybil-farmed guest
+   * can't launder credits into a wallet. Returns null if the guest is gone or
+   * already a wallet (an existing wallet account is used by the caller instead).
    */
   attachWalletToGuest(guestId: string, wallet: string): PlayerRecord | null {
     if (this.getByWallet(wallet)) return null; // wallet already owns an account
@@ -139,6 +153,7 @@ export class Store {
     if (!rec || rec.wallet) return null;
     rec.wallet = wallet;
     rec.guest = false;
+    rec.credits = Math.min(rec.credits, STARTING_CREDITS); // no credit laundering on claim
     if (rec.name.startsWith('Beastling-')) rec.name = `Trainer-${wallet.slice(0, 4)}`;
     this.byWallet.set(wallet, rec.id);
     this.queuePersist(rec);
@@ -161,6 +176,7 @@ export class Store {
       wins: 0,
       losses: 0,
       lastDailyTopUp: 0,
+      tokenExpiresAt: Date.now() + TOKEN_TTL_MS,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -173,7 +189,7 @@ export class Store {
   saveProgress(id: string, save: SaveData) {
     const rec = this.byId.get(id);
     if (!rec) return;
-    rec.name = save.playerName?.slice(0, 24) || rec.name;
+    rec.name = cleanName(save.playerName) || rec.name; // same sanitizer as account creation
     rec.save = save;
     this.queuePersist(rec);
   }

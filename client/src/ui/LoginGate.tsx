@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { STARTERS } from '@aether/shared';
-import { useNet, connectWallet } from '../net/net.js';
+import { useNet, connectWallet, retryConnect } from '../net/net.js';
 import { MonImg } from './components.js';
 
 const TOKEN_KEY = 'aetherbeasts:nettoken';
@@ -11,22 +11,29 @@ const TOKEN_KEY = 'aetherbeasts:nettoken';
  * resumed automatically; everyone else must connect.
  */
 export function LoginGate() {
-  const status = useNet((s) => s.status);
+  const socketReady = useNet((s) => s.socketReady); // transport reachable (≠ authenticated)
+  const authFailed = useNet((s) => s.authFailed);
   const hasPhantom = typeof window !== 'undefined' && !!window.solana?.isPhantom;
   const [phase, setPhase] = useState<'checking' | 'idle' | 'connecting'>('checking');
 
+  // Only briefly wait for an auto-resume if we actually have a token to try.
   useEffect(() => {
-    // Give an auto-resume (stored token) a moment before prompting to connect.
     const hasToken = !!localStorage.getItem(TOKEN_KEY);
-    const t = setTimeout(() => setPhase((p) => (p === 'checking' ? 'idle' : p)), hasToken ? 1800 : 0);
+    if (!hasToken) { setPhase('idle'); return; }
+    const t = setTimeout(() => setPhase((p) => (p === 'checking' ? 'idle' : p)), 1800);
     return () => clearTimeout(t);
   }, []);
+
+  // A failed resume (stale token / rejected sig) should drop us straight to Connect.
+  useEffect(() => { if (authFailed) setPhase('idle'); }, [authFailed]);
 
   const onConnect = async () => {
     setPhase('connecting');
     await connectWallet(); // the gate unmounts once auth:ok sets the wallet
-    setTimeout(() => setPhase('idle'), 1500); // re-enable if the user cancelled / it failed
+    setTimeout(() => setPhase((p) => (p === 'connecting' ? 'idle' : p)), 2000);
   };
+
+  const checking = phase === 'checking';
 
   return (
     <div className="login-gate">
@@ -43,22 +50,22 @@ export function LoginGate() {
           Connecting is free and off-chain (you just sign a message; no transaction).
         </p>
 
-        {phase === 'checking' ? (
+        {checking ? (
           <div className="login-status"><span className="spinner" /> Resuming your session…</div>
         ) : !hasPhantom ? (
-          <a className="btn big gold" href="https://phantom.app/download" target="_blank" rel="noreferrer">
-            Install Phantom →
-          </a>
-        ) : status === 'offline' ? (
-          <div className="login-status warn">Can’t reach the game server. Reconnecting…</div>
+          <>
+            <a className="btn big gold" href="https://phantom.app/download" target="_blank" rel="noreferrer">Install Phantom →</a>
+            <div className="muted small" style={{ marginTop: 8 }}>No Solana wallet detected. Install Phantom, then refresh.</div>
+          </>
+        ) : !socketReady ? (
+          <>
+            <div className="login-status warn">Can’t reach the game server.</div>
+            <button className="btn" onClick={retryConnect}>Retry connection</button>
+          </>
         ) : (
-          <button className="btn big gold" disabled={phase === 'connecting' || status !== 'online'} onClick={onConnect}>
-            {phase === 'connecting' ? 'Check Phantom…' : status === 'connecting' ? 'Connecting…' : '🦊 Connect Phantom'}
+          <button className="btn big gold" disabled={phase === 'connecting'} onClick={onConnect}>
+            {phase === 'connecting' ? 'Check Phantom to sign…' : '🦊 Connect Phantom'}
           </button>
-        )}
-
-        {!hasPhantom && phase !== 'checking' && (
-          <div className="muted small" style={{ marginTop: 8 }}>No Solana wallet detected. Install Phantom, then refresh.</div>
         )}
       </div>
     </div>

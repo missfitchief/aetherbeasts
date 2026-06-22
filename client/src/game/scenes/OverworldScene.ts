@@ -33,7 +33,7 @@ const INTRO_LINES = [
   'Move with WASD or the arrow keys. Press Space to talk to people, read signs, and confirm choices.',
   'Head SOUTH past the gate into Whisperwood Route — its tall grass is crawling with wild Aetherbeasts.',
   'To catch one: weaken it in battle, then choose BAG and throw a Pact Stone. The lower its HP, the better your odds!',
-  'Touch the glowing Aether Shrine here in town any time to heal your team and save. Now go — adventure awaits!',
+  'Rest in your bed at Home, or kneel at the Chapel altar, any time to heal your team and save your journey. Now go — adventure awaits!',
 ];
 
 export class OverworldScene extends Phaser.Scene {
@@ -544,14 +544,22 @@ export class OverworldScene extends Phaser.Scene {
       game.addAether(reward);
       game.showToast(`Victory!  +${reward} ◈ $AETHER`);
     } else if (result.outcome === 'lose') {
-      // Whiteout: return to last shrine + heal.
+      // Whiteout: heal + respawn at the last save point (and PERSIST it, so a
+      // reload doesn't drop you back on the faint tile).
       game.heal();
       const save = game.save!;
-      this.tx = save.lastHeal.x;
-      this.ty = save.lastHeal.y;
-      this.placePlayer();
-      this.cameras.main.fadeIn(300);
-      useDialogue(['You scramble back to safety...', 'Your team has been restored at the shrine.']);
+      const dest = save.lastHeal;
+      const map = dest.map ?? 'world';
+      save.position = { map, x: dest.x, y: dest.y, facing: 'down' };
+      useDialogue(['You black out...', 'Your team was restored where you last saved.']);
+      if (map !== this.world.id) {
+        this.switchMap(map, dest.x, dest.y, 'down');
+      } else {
+        this.tx = dest.x;
+        this.ty = dest.y;
+        this.placePlayer();
+        this.cameras.main.fadeIn(300);
+      }
     }
     // Persist any in-battle changes (HP, EXP, level, evolution mutated in place).
     game.mutate(() => {});

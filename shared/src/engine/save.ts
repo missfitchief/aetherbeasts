@@ -130,6 +130,12 @@ export function grantAether(save: SaveData, n: number): void {
 
 /** Backfill fields added in later save versions so older saves keep working. */
 export function normalizeSave(save: SaveData): SaveData {
+  // Coerce core collections before iterating — a corrupt/partial/legacy blob (or
+  // a hand-crafted save:push) that lost an array must not crash the load path.
+  if (!Array.isArray(save.party)) save.party = [];
+  if (!Array.isArray(save.box)) save.box = Array.from({ length: BOX_TOTAL }, () => null);
+  if (!Array.isArray(save.bag)) save.bag = [];
+  if (!save.dex || typeof save.dex !== 'object') save.dex = emptyDex();
   const legacy = save as unknown as { money?: number; crystals?: number; shards?: number };
   if (typeof save.aether !== 'number') {
     // Migrate old three-currency saves by folding everything into $AETHER.
@@ -168,6 +174,9 @@ export function awaken(save: SaveData, targetUid: string, fodderUid: string): bo
   if (!target || !fodder || target.uid === fodder.uid) return false;
   if (target.speciesId !== fodder.speciesId) return false;
   if ((target.stars ?? 0) >= MAX_STARS) return false;
+  // bump stars and top up currentHp by the new max-HP delta so a full creature
+  // stays full (mirrors evolve/level-up, which preserve the missing-HP fraction)
+  const beforeMax = statOf(target, 'mhp');
   // remove the fodder from wherever it lives
   const pi = save.party.findIndex((c) => c.uid === fodderUid);
   if (pi !== -1) save.party.splice(pi, 1);
@@ -176,5 +185,7 @@ export function awaken(save: SaveData, targetUid: string, fodderUid: string): bo
     if (bi !== -1) save.box[bi] = null;
   }
   target.stars = (target.stars ?? 0) + 1;
+  const afterMax = statOf(target, 'mhp');
+  target.currentHp = Math.min(afterMax, target.currentHp + (afterMax - beforeMax));
   return true;
 }

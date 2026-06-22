@@ -16,11 +16,18 @@ import { localSaveAdapter, setSaveAdapter, type SaveAdapter } from '../state/per
 
 const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string) || 'http://localhost:3001';
 const TOKEN_KEY = 'aetherbeasts:nettoken';
+const ACCOUNT_KEY = 'aetherbeasts:account'; // last authenticated account id (binds the local save)
 
 export type Lobby = 'idle' | 'queued' | 'battling' | 'result';
 
 interface NetState {
   status: 'offline' | 'connecting' | 'online';
+  /** Transport reachability — true whenever the socket is connected, regardless
+   *  of whether we've authenticated. The login gate uses THIS (not `status`) to
+   *  enable Connect, so a brand-new user is never locked out. */
+  socketReady: boolean;
+  /** A login attempt failed (bad/stale token, rejected signature). */
+  authFailed: boolean;
   profile: PublicProfile | null;
   balance: AetherBalance | null;
   wallet: string | null;
@@ -40,6 +47,8 @@ interface NetState {
 
 export const useNet = create<NetState>((set) => ({
   status: 'offline',
+  socketReady: false,
+  authFailed: false,
   profile: null,
   balance: null,
   wallet: null,
@@ -119,17 +128,18 @@ function ensureSocket(): Socket {
 
 function wire(s: Socket) {
   s.on('connect', () => {
+    useNet.setState({ socketReady: true, authFailed: false });
     // Mandatory wallet login: only RESUME a prior session via a stored token.
     // With no token we stay unauthenticated until the player connects Phantom.
     const token = localStorage.getItem(TOKEN_KEY);
     if (token) s.emit('auth:guest', { token, name: useGame.getState().save?.playerName });
   });
-  s.on('connect_error', () => useNet.setState({ status: 'offline' }));
-  s.on('disconnect', () => useNet.setState({ status: 'offline' }));
+  s.on('connect_error', () => useNet.setState({ socketReady: false, status: 'offline' }));
+  s.on('disconnect', () => useNet.setState({ socketReady: false, status: 'offline' }));
 
   s.on('auth:ok', (p: AuthOk) => {
     localStorage.setItem(TOKEN_KEY, p.token);
-    useNet.setState({ status: 'online', profile: p.profile, wallet: p.profile.wallet });
+    useNet.setState({ status: 'online', socketReady: true, authFailed: false, profile: p.profile, wallet: p.profile.wallet });
 
     // Only reconcile the save on the first auth or an explicit wallet sign-in.
     const explicit = !firstAuthDone || walletLoginPending;
@@ -147,8 +157,16 @@ function wire(s: Socket) {
         localSaveAdapter.save(p.save);
       } else {
         const cur = g.save ?? local;
-        if (cur) s.emit('save:push', { save: cur }); // push our newer/local progress up
+        const sameAccount = localStorage.getItem(ACCOUNT_KEY) === p.profile.id;
+        if (cur && sameAccount) {
+          s.emit('save:push', { save: cur }); // same account, server has no/older copy — re-push
+        } else if (cur && !sameAccount) {
+          // A save from a DIFFERENT account is in this browser (shared device) — do
+          // NOT adopt it; start this wallet clean (its real save lives server-side).
+          useGame.setState({ save: null, version: useGame.getState().version + 1 });
+        }
       }
+      localStorage.setItem(ACCOUNT_KEY, p.profile.id);
       setSaveAdapter(serverSaveAdapter);
     } else {
       flushSave(); // pure reconnect — just make sure the server has our latest
@@ -156,7 +174,13 @@ function wire(s: Socket) {
     s.emit('balance:get', {});
   });
 
-  s.on('auth:error', (p: { message: string }) => toast(p.message));
+  s.on('auth:error', (p: { message: string }) => {
+    // Stale/garbage token or rejected signature: drop the token so we don't keep
+    // retrying it, and let the gate surface Connect immediately.
+    localStorage.removeItem(TOKEN_KEY);
+    useNet.setState({ authFailed: true });
+    toast(p.message);
+  });
   s.on('save:saved', () => {});
   s.on('profile:update', (p: PublicProfile) => useNet.setState({ profile: p, wallet: p.wallet }));
   s.on('balance:aether', (b: AetherBalance) => useNet.setState({ balance: b }));
@@ -246,6 +270,12 @@ export async function connectWallet() {
 
 export function refreshBalance() {
   socket?.connected && socket.emit('balance:get', {});
+}
+
+/** Manual reconnect for the login gate's offline state. */
+export function retryConnect() {
+  if (socket && !socket.connected) socket.connect();
+  else ensureSocket();
 }
 
 export function findMatch(stake: number) {

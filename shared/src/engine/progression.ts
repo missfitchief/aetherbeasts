@@ -39,7 +39,9 @@ export function gainExp(c: Creature, amount: number): LevelUpResult {
 
     for (const entry of species.learnset) {
       if (entry.level === c.level && !c.moves.includes(entry.move)) {
-        newMoves.push(entry.move);
+        // Actually TEACH the move (append while under MAX_MOVES) and only report
+        // moves genuinely learned — fixes "learned X!" for a move never added.
+        if (teachMove(c, entry.move)) newMoves.push(entry.move);
       }
     }
     for (const evo of species.evolutions) {

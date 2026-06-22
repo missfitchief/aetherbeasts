@@ -34,6 +34,11 @@ export function tierOf(speciesId: string): GachaTier {
 /** Summon pools by tier, derived from the species table (dex order). */
 export const GACHA_POOL: Record<GachaTier, string[]> = { 3: [], 4: [], 5: [] };
 for (const id of SPECIES_ORDER) GACHA_POOL[tierOf(id)].push(id);
+// Fail loudly at load if a data edit ever empties a tier — an empty pool would
+// make pickSpecies return undefined and crash summons at runtime.
+for (const t of [3, 4, 5] as GachaTier[]) {
+  if (GACHA_POOL[t].length === 0) throw new Error(`gacha: species pool for tier ${t} is empty`);
+}
 
 // ---- rates & pity ---------------------------------------------------------
 const RATE_5 = 0.03;

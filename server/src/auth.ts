@@ -7,6 +7,7 @@ export function buildLoginMessage(nonce: string): string {
     'Aetherbeasts login',
     'Sign to prove you own this wallet.',
     'This is free, off-chain, and sends no transaction.',
+    'domain: aetherbeasts.game', // bind the signature to this app (anti cross-protocol replay)
     `nonce: ${nonce}`,
   ].join('\n');
 }

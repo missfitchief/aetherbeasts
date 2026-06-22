@@ -9,7 +9,7 @@
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { io, type Socket } from 'socket.io-client';
+import { type Socket } from 'socket.io-client';
 import {
   newSave,
   createCreature,
@@ -18,6 +18,7 @@ import {
   type PvpBattleView,
   type MatchOver,
 } from '@aether/shared';
+import { walletConnect } from './_wallet.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const serverDir = resolve(here, '..');
@@ -47,15 +48,12 @@ interface Client {
   sawEnd: boolean;
 }
 
-function connect(name: string, save: SaveData): Client {
-  const socket = io(URL, { transports: ['websocket'], forceNew: true });
-  const c: Client = { name, socket, creditsStart: 0, state: null, over: null, events: 0, sawEnd: false };
+async function connect(name: string, save: SaveData): Promise<Client> {
+  const { socket, profile } = await walletConnect(URL); // mandatory wallet auth
+  const c: Client = { name, socket, creditsStart: profile.credits, state: null, over: null, events: 0, sawEnd: false };
 
-  socket.on('auth:ok', (p: any) => {
-    c.creditsStart = p.profile.credits;
-    socket.emit('save:push', { save });
-  });
-  socket.on('save:saved', () => socket.emit('match:find', { stake: 100 }));
+  socket.once('save:saved', () => socket.emit('match:find', { stake: 100 }));
+  socket.emit('save:push', { save });
   socket.on('battle:state', (st: PvpBattleView) => { c.state = st; });
   socket.on('battle:yourTurn', (p: { matchId: string; turn: number }) => {
     const active = c.state?.you.active;
@@ -69,9 +67,6 @@ function connect(name: string, save: SaveData): Client {
   });
   socket.on('match:over', (mo: MatchOver) => { c.over = mo; });
   socket.on('error', (e: any) => console.error(`[${name}] server error:`, e?.message));
-  socket.on('auth:error', (e: any) => console.error(`[${name}] auth error:`, e?.message));
-
-  socket.emit('auth:guest', { name });
   return c;
 }
 
@@ -95,8 +90,8 @@ async function main() {
   try {
     await waitForListen(child);
 
-    const p1 = connect('Ari', makeSave('Ari', 'drachnid', 22, 'duvan', 20));
-    const p2 = connect('Bex', makeSave('Bex', 'draquatic', 21, 'plaugspout', 19));
+    const p1 = await connect('Ari', makeSave('Ari', 'drachnid', 22, 'duvan', 20));
+    const p2 = await connect('Bex', makeSave('Bex', 'draquatic', 21, 'plaugspout', 19));
 
     const start = Date.now();
     while ((!p1.over || !p2.over) && Date.now() - start < 30_000) {

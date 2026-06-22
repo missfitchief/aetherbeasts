@@ -153,11 +153,12 @@ export function buildWorld(): WorldMap {
   // heights (not one flat wall), let some trees sit a row deeper, and dot a little
   // undergrowth at the base. Reads like the lip of a forest, not a fence of trees.
   const treeEdge = (x0: number, x1: number, yBase: number) => {
+    const water = (xx: number, yy: number) => tiles[yy]?.[xx]?.type === 'water';
     for (let x = x0; x <= x1; x++) {
       const row = yBase - (rnd() < 0.45 ? 1 : 0);
-      if (rnd() < 0.88) treeAt(x, row);
-      if (rnd() < 0.32) treeAt(x, row - 1);   // a second, deeper tree for depth
-      if (rnd() < 0.16) obj('bush', x, yBase); // low undergrowth softening the base
+      if (!water(x, row) && rnd() < 0.88) treeAt(x, row);
+      if (!water(x, row - 1) && rnd() < 0.32) treeAt(x, row - 1); // a second, deeper tree for depth
+      if (!water(x, yBase) && rnd() < 0.16) obj('bush', x, yBase); // low undergrowth softening the base
     }
   };
   const treeCluster = (cx: number, cy: number, n: number, spread: number) => {

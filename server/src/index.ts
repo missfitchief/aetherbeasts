@@ -38,6 +38,7 @@ const matches = new MatchManager(io, store);
 
 function authOk(socket: Socket, rec: PlayerRecord) {
   store.applyDailyFloor(rec.id, DAILY_CREDIT_FLOOR);
+  store.extendSession(rec.id); // sliding resume-token expiry
   const fresh = store.getById(rec.id) ?? rec;
   sessions.set(socket.id, { playerId: fresh.id, token: fresh.token });
   socket.emit('auth:ok', {
@@ -113,13 +114,15 @@ function bind(socket: Socket) {
 
 io.on('connection', (socket) => {
   // Guest path (also handles token resume for returning guests/wallets).
+  // Session RESUME only. Mandatory wallet login: we never mint anonymous
+  // accounts — an absent or stale/expired token must sign in with a wallet.
   socket.on('auth:guest', (p: { name?: string; token?: string } = {}) => {
     try {
       if (p.token) {
         const rec = store.getByToken(p.token);
         if (rec) return authOk(socket, rec);
       }
-      authOk(socket, store.createGuest(p.name));
+      socket.emit('auth:error', { message: 'Connect your wallet to play.' });
     } catch {
       socket.emit('auth:error', { message: 'Could not start a session.' });
     }
