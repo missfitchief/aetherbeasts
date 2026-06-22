@@ -17,15 +17,18 @@ export const SOLANA_RPC =
   process.env.SOLANA_RPC ||
   (SOLANA_CLUSTER === 'mainnet' ? 'https://api.mainnet-beta.solana.com' : 'https://api.devnet.solana.com');
 
-// --- on-chain $AETHER gacha payments ---------------------------------------
-// The treasury wallet that premium summons pay into, and the $AETHER price per
-// pull (UI units). On-chain summons are DISABLED until a mint + treasury + a
-// non-zero price are all set (so the feature lies dormant until the pump.fun
-// token is live and configured).
+// --- on-chain $AETHER gacha payments (USD-pegged, dynamic) -----------------
+// Premium summons are priced in USD and converted to $AETHER at the live token
+// price, so a pull always costs ~the same dollars regardless of how far the
+// token pumps. On-chain summons are DISABLED until a mint + treasury are set.
 export const TREASURY_ADDRESS = process.env.TREASURY_ADDRESS || '';
-export const AETHER_SUMMON_PRICE_1 = Number(process.env.AETHER_SUMMON_PRICE_1 || 0);
-export const AETHER_SUMMON_PRICE_10 = Number(process.env.AETHER_SUMMON_PRICE_10 || 0);
-export const ONCHAIN_SUMMON_ENABLED = !!AETHER_MINT && !!TREASURY_ADDRESS && AETHER_SUMMON_PRICE_1 > 0;
-export function summonPriceAether(count: number): number {
-  return count >= 10 ? AETHER_SUMMON_PRICE_10 || AETHER_SUMMON_PRICE_1 * 10 : AETHER_SUMMON_PRICE_1;
-}
+/** USD price targets per pull (tune freely). */
+export const SUMMON_USD_1 = Number(process.env.SUMMON_USD_1 || 1.5);
+export const SUMMON_USD_10 = Number(process.env.SUMMON_USD_10 || 13.5);
+/** Floor $AETHER price used if the live feed is unavailable (so we never charge
+ *  absurd amounts on a feed outage). Set near the expected launch price. */
+export const AETHER_PRICE_FLOOR_USD = Number(process.env.AETHER_PRICE_FLOOR_USD || 0.00005);
+/** Max age of a price-quote before it must be refreshed (anti front-run). */
+export const QUOTE_TTL_MS = Number(process.env.QUOTE_TTL_MS || 90_000);
+export const ONCHAIN_SUMMON_ENABLED = !!AETHER_MINT && !!TREASURY_ADDRESS;
+export const summonUsd = (count: number): number => (count >= 10 ? SUMMON_USD_10 : SUMMON_USD_1);

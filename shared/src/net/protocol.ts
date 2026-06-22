@@ -113,11 +113,25 @@ export interface ServerToClient {
   'battle:yourTurn': (p: { matchId: string; turn: number; deadline: number }) => void;
   'match:over': (p: MatchOver) => void;
   'opponent:left': (p: { matchId: string; message: string }) => void;
-  // On-chain ($AETHER) gacha: the server verifies the payment, runs the pull,
-  // and returns the result + the authoritative updated save.
+  // On-chain ($AETHER) gacha. A USD-pegged price quote (locked for a short
+  // window), then the verified result + authoritative updated save.
+  'summon:quote': (p: AetherSummonQuote) => void;
   'summon:result': (p: { report: SummonReport; save: SaveData }) => void;
   'summon:error': (p: { message: string }) => void;
   'error': (p: { message: string }) => void;
+}
+
+/** A short-lived USD-pegged price for a premium summon, in $AETHER. */
+export interface AetherSummonQuote {
+  quoteId: string;
+  bannerId: string;
+  count: number;
+  aetherAmount: number; // $AETHER to transfer to `treasury`
+  treasury: string;
+  mint: string;
+  usd: number;          // the USD target this was priced at
+  priceUsd: number;     // the $AETHER/USD used
+  expiresAt: number;    // epoch ms
 }
 
 export interface ClientToServer {
@@ -130,7 +144,9 @@ export interface ClientToServer {
   'match:cancel': () => void;
   'battle:action': (p: BattleActionMsg) => void;
   'battle:forfeit': (p: { matchId: string }) => void;
-  /** Premium gacha paid on-chain: client sends the confirmed $AETHER-transfer
-   *  signature; the server verifies it before granting the pull. */
-  'summon:onchain': (p: { txSig: string; bannerId: string; count: number }) => void;
+  /** Ask for a live USD-pegged price quote for a premium summon. */
+  'summon:requestQuote': (p: { bannerId: string; count: number }) => void;
+  /** Premium gacha paid on-chain: the quote being paid + the confirmed
+   *  $AETHER-transfer signature; the server verifies both before granting. */
+  'summon:onchain': (p: { quoteId: string; txSig: string }) => void;
 }
