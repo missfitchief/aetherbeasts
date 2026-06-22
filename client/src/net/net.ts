@@ -9,6 +9,8 @@ import type {
   BattleEventsMsg,
   AuthOk,
   SaveData,
+  AetherSummonQuote,
+  SummonReport,
 } from '@aether/shared';
 import { DEFAULT_STAKE } from '@aether/shared';
 import { useGame } from '../state/store.js';
@@ -17,6 +19,15 @@ import { localSaveAdapter, setSaveAdapter, type SaveAdapter } from '../state/per
 const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string) || 'http://localhost:3001';
 const TOKEN_KEY = 'aetherbeasts:nettoken';
 const ACCOUNT_KEY = 'aetherbeasts:account'; // last authenticated account id (binds the local save)
+const PENDING_SUMMON_KEY = 'aetherbeasts:pendingSummon'; // a paid summon awaiting its result (recovery)
+
+function readPendingSummon(): { quoteId: string; txSig: string } | null {
+  try { const s = localStorage.getItem(PENDING_SUMMON_KEY); return s ? JSON.parse(s) : null; } catch { return null; }
+}
+function clearPendingSummon(sig?: string) {
+  if (sig) { const p = readPendingSummon(); if (p && p.txSig !== sig) return; } // only clear the matching one
+  localStorage.removeItem(PENDING_SUMMON_KEY);
+}
 
 export type Lobby = 'idle' | 'queued' | 'battling' | 'result';
 
@@ -31,6 +42,8 @@ interface NetState {
   profile: PublicProfile | null;
   balance: AetherBalance | null;
   wallet: string | null;
+  /** Whether on-chain $AETHER summons are live on the server (mint+treasury set). */
+  onchainSummon: boolean;
   arenaOpen: boolean;
   lobby: Lobby;
   stake: number;
@@ -41,8 +54,13 @@ interface NetState {
   submitting: boolean;
   result: MatchOver | null;
   note: string | null;
+  /** Premium ($AETHER) summon flow: idle → quoting → signing → verifying. */
+  summonPhase: 'idle' | 'quoting' | 'signing' | 'verifying';
+  /** The result of a completed premium summon, for the reveal animation. */
+  summonReport: SummonReport | null;
   setArena: (open: boolean) => void;
   setStake: (n: number) => void;
+  clearSummonReport: () => void;
 }
 
 export const useNet = create<NetState>((set) => ({
@@ -52,6 +70,7 @@ export const useNet = create<NetState>((set) => ({
   profile: null,
   balance: null,
   wallet: null,
+  onchainSummon: false,
   arenaOpen: false,
   lobby: 'idle',
   stake: DEFAULT_STAKE,
@@ -62,8 +81,11 @@ export const useNet = create<NetState>((set) => ({
   submitting: false,
   result: null,
   note: null,
+  summonPhase: 'idle',
+  summonReport: null,
   setArena: (open) => set({ arenaOpen: open }),
   setStake: (n) => set({ stake: n }),
+  clearSummonReport: () => set({ summonReport: null }),
 }));
 
 // ---- socket + module state -------------------------------------------------
@@ -77,6 +99,7 @@ let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let firstAuthDone = false;
 let walletLoginPending = false;
 let walletConnecting = false;
+let lastAppliedTxSig: string | null = null; // dedupe a redelivered summon:result
 
 const toast = (t: string) => useGame.getState().showToast(t);
 
@@ -91,6 +114,9 @@ const serverSaveAdapter: SaveAdapter = {
 };
 
 function schedulePush(save: SaveData) {
+  // While a paid pull is mid-flight the server is about to author the post-summon
+  // save; don't let a stale pre-summon push land afterwards and erase the beast.
+  if (useNet.getState().summonPhase !== 'idle') return;
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
     pushTimer = null;
@@ -113,7 +139,7 @@ export function startNet() {
   window.addEventListener('pagehide', flushSave);
   if (import.meta.env.DEV) {
     (window as unknown as { __net: unknown }).__net = {
-      useNet, findMatch, cancelMatch, submitMove, submitSwitch, forfeitMatch, connectWallet, refreshBalance, leaveResult,
+      useNet, findMatch, cancelMatch, submitMove, submitSwitch, forfeitMatch, connectWallet, refreshBalance, leaveResult, premiumSummon,
     };
   }
 }
@@ -139,7 +165,7 @@ function wire(s: Socket) {
 
   s.on('auth:ok', (p: AuthOk) => {
     localStorage.setItem(TOKEN_KEY, p.token);
-    useNet.setState({ status: 'online', socketReady: true, authFailed: false, profile: p.profile, wallet: p.profile.wallet });
+    useNet.setState({ status: 'online', socketReady: true, authFailed: false, profile: p.profile, wallet: p.profile.wallet, onchainSummon: p.onchainSummon });
 
     // Only reconcile the save on the first auth or an explicit wallet sign-in.
     const explicit = !firstAuthDone || walletLoginPending;
@@ -172,6 +198,13 @@ function wire(s: Socket) {
       flushSave(); // pure reconnect — just make sure the server has our latest
     }
     s.emit('balance:get', {});
+    // Recover an interrupted paid summon: re-submit it (the server redelivers the
+    // result idempotently if it was already granted, or grants it now).
+    const pend = readPendingSummon();
+    if (pend?.quoteId && pend.txSig) {
+      useNet.setState({ summonPhase: 'verifying' });
+      s.emit('summon:onchain', pend);
+    }
   });
 
   s.on('auth:error', (p: { message: string }) => {
@@ -227,6 +260,44 @@ function wire(s: Socket) {
 
   s.on('opponent:left', (p: { message: string }) => useNet.setState({ note: p.message }));
   s.on('error', (p: { message: string }) => toast(p.message));
+
+  // Premium ($AETHER) summon: server quoted a price → pay it with Phantom → send
+  // the signature back for verification.
+  s.on('summon:quote', async (q: AetherSummonQuote) => {
+    if (useNet.getState().summonPhase !== 'quoting') return; // ignore stray/late quotes
+    useNet.setState({ summonPhase: 'signing' });
+    try {
+      const { paySummon } = await import('./aetherPay.js');
+      // paySummon only throws BEFORE a signature exists (user reject / RPC fail);
+      // once it returns a sig the payment may have landed, so we always submit it.
+      const txSig = await paySummon(q);
+      // Persist the payment so a dropped emit/result is recoverable on reconnect.
+      localStorage.setItem(PENDING_SUMMON_KEY, JSON.stringify({ quoteId: q.quoteId, txSig }));
+      useNet.setState({ summonPhase: 'verifying' });
+      s.emit('summon:onchain', { quoteId: q.quoteId, txSig });
+    } catch (e) {
+      useNet.setState({ summonPhase: 'idle' });
+      const msg = e instanceof Error ? e.message : '';
+      toast(/reject|denied|cancel|user/i.test(msg) ? 'Payment cancelled — no $AETHER was spent.' : 'Could not send the payment — no $AETHER was spent.');
+    }
+  });
+
+  s.on('summon:result', (p: { report: SummonReport; save: SaveData; txSig: string }) => {
+    clearPendingSummon(p.txSig); // payment resolved — drop the recovery marker
+    if (lastAppliedTxSig === p.txSig) { useNet.setState({ summonPhase: 'idle' }); return; } // duplicate redelivery
+    lastAppliedTxSig = p.txSig;
+    // The server is authoritative for a paid pull — adopt its save verbatim.
+    useGame.getState().hydrateSave(p.save);
+    localSaveAdapter.save(p.save);
+    useNet.setState({ summonPhase: 'idle', summonReport: p.report });
+    s.emit('balance:get', {}); // wallet balance dropped — refresh the HUD
+  });
+
+  s.on('summon:error', (p: { message: string }) => {
+    clearPendingSummon();
+    useNet.setState({ summonPhase: 'idle' });
+    toast(p.message);
+  });
 }
 
 // ---- actions ---------------------------------------------------------------
@@ -325,4 +396,29 @@ export function forfeitMatch() {
 
 export function leaveResult() {
   useNet.setState({ lobby: 'idle', view: null, result: null, log: [], note: null });
+}
+
+let summonWatchdog: ReturnType<typeof setTimeout> | null = null;
+/** Start a premium ($AETHER) summon: ask the server for a USD-pegged price quote.
+ *  The quote handler pays it with Phantom and submits the signature. */
+export function premiumSummon(bannerId: string, count: number) {
+  const s = ensureSocket();
+  if (!s.connected) { toast('Connecting to the server…'); return; }
+  if (!useNet.getState().wallet) { toast('Connect your wallet first.'); return; }
+  if (useNet.getState().summonPhase !== 'idle') return; // one premium pull at a time
+  flushSave(); // server grants beasts onto its copy — make sure it has our latest save first
+  useNet.setState({ summonPhase: 'quoting' });
+  s.emit('summon:requestQuote', { bannerId, count });
+  // Never strand the UI if a step silently drops (rejected RPC, lost reply, …).
+  // We only reset the phase; any already-sent payment stays recorded and is
+  // re-submitted on the next (re)connection, so it can't be lost.
+  if (summonWatchdog) clearTimeout(summonWatchdog);
+  summonWatchdog = setTimeout(() => {
+    if (useNet.getState().summonPhase !== 'idle') {
+      useNet.setState({ summonPhase: 'idle' });
+      toast(readPendingSummon()
+        ? 'Still confirming your payment — it will be verified shortly.'
+        : 'Summon timed out — please try again.');
+    }
+  }, 200_000);
 }

@@ -109,7 +109,7 @@ export const useGame = create<GameStore>((set, get) => ({
     if (!save) return;
     chooseStarter(save, speciesId);
     save.createdAt = save.createdAt || Date.now();
-    save.updatedAt = Date.now();
+    save.updatedAt = Math.max((save.updatedAt ?? 0) + 1, Date.now());
     saveAdapter.save(save);
     set({ save: { ...save }, screen: 'playing', version: get().version + 1 });
   },
@@ -117,7 +117,7 @@ export const useGame = create<GameStore>((set, get) => ({
   persist() {
     const { save } = get();
     if (!save) return;
-    save.updatedAt = Date.now();
+    save.updatedAt = Math.max((save.updatedAt ?? 0) + 1, Date.now());
     saveAdapter.save(save);
   },
 
@@ -125,7 +125,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const { save } = get();
     if (!save) return;
     fn(save);
-    save.updatedAt = Date.now();
+    save.updatedAt = Math.max((save.updatedAt ?? 0) + 1, Date.now());
     saveAdapter.save(save);
     set({ save: { ...save }, version: get().version + 1 });
   },
@@ -218,7 +218,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const { save } = get();
     if (!save || !canAfford(save, bannerId, count)) return null;
     const report = engineSummon(save, bannerId, count, defaultRng);
-    save.updatedAt = Date.now();
+    save.updatedAt = Math.max((save.updatedAt ?? 0) + 1, Date.now());
     saveAdapter.save(save);
     set({ save: { ...save }, version: get().version + 1 });
     return report;

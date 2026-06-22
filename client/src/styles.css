@@ -392,6 +392,11 @@ html, body, #root {
   background: linear-gradient(180deg, #d9a93a, #a87d22); border-color: #ffcf5c; color: #1a1408;
 }
 .btn.big .cost { font-size: 12px; font-weight: 700; opacity: 0.9; }
+.rift-premium {
+  margin-top: 12px; padding-top: 12px; border-top: 1px dashed rgba(255, 207, 92, 0.35);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.rift-premium .premium-status { color: #ffcf5c; font-weight: 600; }
 
 /* reveal overlay */
 .reveal-overlay {

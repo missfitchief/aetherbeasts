@@ -1,9 +1,9 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { Server, type Socket } from 'socket.io';
-import type { SaveData, PlayerAction } from '@aether/shared';
+import type { SaveData, PlayerAction, SummonReport } from '@aether/shared';
 import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng } from '@aether/shared';
-import { PORT, CLIENT_ORIGIN, TREASURY_ADDRESS, AETHER_MINT, QUOTE_TTL_MS, ONCHAIN_SUMMON_ENABLED } from './config.js';
+import { PORT, corsOrigin, TREASURY_ADDRESS, AETHER_MINT, AETHER_DECIMALS, QUOTE_TTL_MS, ONCHAIN_SUMMON_ENABLED, validateConfig } from './config.js';
 import { Store, publicProfile, type PlayerRecord } from './store.js';
 import { buildLoginMessage, verifySignature } from './auth.js';
 import { aetherBalance } from './balance.js';
@@ -22,8 +22,14 @@ const bound = new Set<string>(); // socket.ids that already have game handlers
 const pending = new Map<string, { publicKey: string; nonce: string; expiresAt: number }>();
 const CHALLENGE_TTL = 60_000;
 // Short-lived USD-pegged summon price quotes (single-use, per-player).
-interface SummonQuoteRec { playerId: string; bannerId: string; count: number; aetherAmount: number; expiresAt: number; }
+interface SummonQuoteRec { playerId: string; bannerId: string; count: number; baseUnits: bigint; expiresAt: number; }
 const summonQuotes = new Map<string, SummonQuoteRec>();
+const MAX_QUOTES_PER_PLAYER = 5;
+// Granted pulls keyed by payment signature, for idempotent redelivery if the
+// result packet is lost (client re-submits the same txSig on reconnect).
+interface GrantRec { playerId: string; report: SummonReport; at: number }
+const grantedSummons = new Map<string, GrantRec>();
+const GRANT_TTL_MS = 30 * 60_000;
 
 const httpServer = createServer((req, res) => {
   if (req.url === '/health' || req.url === '/') {
@@ -36,7 +42,7 @@ const httpServer = createServer((req, res) => {
 });
 
 const io = new Server(httpServer, {
-  cors: { origin: CLIENT_ORIGIN === '*' ? true : CLIENT_ORIGIN, methods: ['GET', 'POST'] },
+  cors: { origin: corsOrigin, methods: ['GET', 'POST'] },
 });
 
 const matches = new MatchManager(io, store);
@@ -51,6 +57,7 @@ function authOk(socket: Socket, rec: PlayerRecord) {
     profile: publicProfile(fresh),
     save: fresh.save,
     serverNow: Date.now(),
+    onchainSummon: ONCHAIN_SUMMON_ENABLED,
   });
   if (!bound.has(socket.id)) {
     bind(socket);
@@ -118,15 +125,26 @@ function bind(socket: Socket) {
     if (!id) return;
     if (!ONCHAIN_SUMMON_ENABLED) return socket.emit('summon:error', { message: 'On-chain summons are not available yet.' });
     if (!p || typeof p.bannerId !== 'string') return;
+    const rec = store.getById(id);
+    if (!rec?.wallet) return socket.emit('summon:error', { message: 'Link a wallet to summon.' });
+    // Refuse to PRICE (so the player never pays) without a save to receive the beast.
+    if (!rec.save) return socket.emit('summon:error', { message: 'Play and save first, then summon.' });
     const count = Number(p.count) >= 10 ? 10 : 1;
+    // Bound the per-player quote set (drop the oldest) so it can't grow unbounded.
+    const mine = [...summonQuotes.entries()].filter(([, q]) => q.playerId === id);
+    if (mine.length >= MAX_QUOTES_PER_PLAYER) {
+      mine.sort((a, b) => a[1].expiresAt - b[1].expiresAt);
+      summonQuotes.delete(mine[0][0]);
+    }
     try {
       const q = await summonAetherQuote(count);
       const quoteId = randomUUID();
       const expiresAt = Date.now() + QUOTE_TTL_MS;
-      summonQuotes.set(quoteId, { playerId: id, bannerId: p.bannerId, count, aetherAmount: q.aetherAmount, expiresAt });
+      summonQuotes.set(quoteId, { playerId: id, bannerId: p.bannerId, count, baseUnits: BigInt(q.aetherBaseUnits), expiresAt });
       socket.emit('summon:quote', {
         quoteId, bannerId: p.bannerId, count,
-        aetherAmount: q.aetherAmount, treasury: TREASURY_ADDRESS, mint: AETHER_MINT,
+        aetherAmount: q.aetherAmount, aetherBaseUnits: q.aetherBaseUnits,
+        treasury: TREASURY_ADDRESS, mint: AETHER_MINT, decimals: AETHER_DECIMALS,
         usd: q.usd, priceUsd: q.priceUsd, expiresAt,
       });
     } catch {
@@ -137,22 +155,44 @@ function bind(socket: Socket) {
   socket.on('summon:onchain', async (p: { quoteId: string; txSig: string }) => {
     const id = pid();
     if (!id || !p || typeof p.quoteId !== 'string' || typeof p.txSig !== 'string') return;
+    const rec = store.getById(id);
+    if (!rec) return;
+
+    // Idempotent redelivery: if this payment was already granted to this player,
+    // re-send the result (covers a lost result packet / reconnect re-emit) instead
+    // of erroring out and stranding a real payment.
+    const prior = grantedSummons.get(p.txSig);
+    if (prior) {
+      if (prior.playerId !== id) return socket.emit('summon:error', { message: 'That payment belongs to another account.' });
+      if (rec.save) return socket.emit('summon:result', { report: prior.report, save: rec.save, txSig: p.txSig });
+      return socket.emit('summon:error', { message: 'Your save is unavailable — reconnect and try again.' });
+    }
+
     const quote = summonQuotes.get(p.quoteId);
     if (!quote || quote.playerId !== id) return socket.emit('summon:error', { message: 'Unknown or expired quote — get a fresh price.' });
     if (quote.expiresAt < Date.now()) {
       summonQuotes.delete(p.quoteId);
       return socket.emit('summon:error', { message: 'Quote expired — get a fresh price.' });
     }
-    const check = await verifyAetherPayment(p.txSig, quote.aetherAmount);
-    if (!check.ok) return socket.emit('summon:error', { message: check.reason ?? 'Payment not verified.' });
-    const rec = store.getById(id);
-    if (!rec?.save) return socket.emit('summon:error', { message: 'Play and save first, then summon.' });
-    summonQuotes.delete(p.quoteId); // single-use: consume only after the payment verifies
+    if (!rec.save) return socket.emit('summon:error', { message: 'Play and save first, then summon.' });
+
+    const check = await verifyAetherPayment(p.txSig, quote.baseUnits, rec.wallet, store);
+    if (!check.ok) {
+      // Race: a concurrent emit may have just granted it — redeliver instead of erroring.
+      const g2 = grantedSummons.get(p.txSig);
+      if (g2 && g2.playerId === id) return socket.emit('summon:result', { report: g2.report, save: rec.save, txSig: p.txSig });
+      return socket.emit('summon:error', { message: check.reason ?? 'Payment not verified.' });
+    }
+    summonQuotes.delete(p.quoteId); // single-use
     try {
       const seed = (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0;
       const report = engineSummon(rec.save, quote.bannerId, quote.count, seededRng(seed), { prepaid: true });
+      // Stamp a monotonic timestamp so a late, in-flight pre-summon push can't
+      // clobber the server-authored save that now holds the paid beast.
+      rec.save.updatedAt = Math.max((rec.save.updatedAt ?? 0) + 1, Date.now());
       store.saveProgress(id, rec.save);
-      socket.emit('summon:result', { report, save: rec.save });
+      grantedSummons.set(p.txSig, { playerId: id, report, at: Date.now() });
+      socket.emit('summon:result', { report, save: rec.save, txSig: p.txSig });
     } catch {
       socket.emit('summon:error', { message: 'Summon could not be completed.' });
     }
@@ -218,15 +258,17 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => pending.delete(socket.id));
 });
 
-// Expire abandoned wallet challenges and stale summon quotes.
+// Expire abandoned wallet challenges, stale summon quotes, and old grant records.
 setInterval(() => {
   const now = Date.now();
   for (const [id, c] of pending) if (c.expiresAt < now) pending.delete(id);
   for (const [id, q] of summonQuotes) if (q.expiresAt < now) summonQuotes.delete(id);
+  for (const [sig, g] of grantedSummons) if (now - g.at > GRANT_TTL_MS) grantedSummons.delete(sig);
 }, 30_000);
 
 process.on('unhandledRejection', (e) => console.error('[unhandledRejection]', e));
 process.on('uncaughtException', (e) => console.error('[uncaughtException]', e));
 
+validateConfig(); // fail fast on a misconfigured money path; log the on-chain state
 await store.init();
 httpServer.listen(PORT, () => console.log(`[aetherbeasts] PvP server listening on http://localhost:${PORT}`));

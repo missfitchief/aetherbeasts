@@ -1,15 +1,28 @@
 import bs58 from 'bs58';
+import type { Transaction } from '@solana/web3.js';
 
 // Minimal shape of the Phantom (window.solana) provider we rely on.
-interface SolanaProvider {
+export interface SolanaProvider {
   isPhantom?: boolean;
+  publicKey?: { toString(): string } | null;
+  isConnected?: boolean;
   connect: () => Promise<{ publicKey: { toString(): string } }>;
   signMessage: (msg: Uint8Array, display?: string) => Promise<{ signature: Uint8Array }>;
+  /** Phantom signs AND submits the transaction, returning its signature. */
+  signAndSendTransaction: (tx: Transaction) => Promise<{ signature: string }>;
 }
 declare global {
   interface Window {
     solana?: SolanaProvider;
   }
+}
+
+/** The connected Phantom provider, or throw a user-facing error. */
+export async function getConnectedProvider(): Promise<SolanaProvider> {
+  const provider = window.solana;
+  if (!provider || !provider.isPhantom) throw new Error('Phantom wallet not found. Install it from phantom.app.');
+  if (!provider.publicKey) await provider.connect();
+  return provider;
 }
 
 export interface WalletHandle {

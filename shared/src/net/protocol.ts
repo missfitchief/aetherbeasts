@@ -43,6 +43,7 @@ export interface AuthOk {
   profile: PublicProfile;
   save: SaveData | null;  // server-stored progression (null => client uploads its local save)
   serverNow: number;
+  onchainSummon: boolean; // is the on-chain $AETHER gacha live (mint+treasury set)?
 }
 
 // ---- battle views (always rendered from the recipient's perspective) -------
@@ -116,7 +117,7 @@ export interface ServerToClient {
   // On-chain ($AETHER) gacha. A USD-pegged price quote (locked for a short
   // window), then the verified result + authoritative updated save.
   'summon:quote': (p: AetherSummonQuote) => void;
-  'summon:result': (p: { report: SummonReport; save: SaveData }) => void;
+  'summon:result': (p: { report: SummonReport; save: SaveData; txSig: string }) => void;
   'summon:error': (p: { message: string }) => void;
   'error': (p: { message: string }) => void;
 }
@@ -126,12 +127,14 @@ export interface AetherSummonQuote {
   quoteId: string;
   bannerId: string;
   count: number;
-  aetherAmount: number; // $AETHER to transfer to `treasury`
+  aetherAmount: number;     // $AETHER (UI units) — for display only
+  aetherBaseUnits: string;  // EXACT amount to transfer (integer base units, as a string)
   treasury: string;
   mint: string;
-  usd: number;          // the USD target this was priced at
-  priceUsd: number;     // the $AETHER/USD used
-  expiresAt: number;    // epoch ms
+  decimals: number;         // mint decimals
+  usd: number;              // the USD target this was priced at
+  priceUsd: number;         // the $AETHER/USD used
+  expiresAt: number;        // epoch ms
 }
 
 export interface ClientToServer {

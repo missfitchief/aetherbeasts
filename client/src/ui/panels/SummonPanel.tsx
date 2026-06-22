@@ -5,6 +5,8 @@ import {
   type SummonReport, type GachaTier, type Currency,
 } from '@aether/shared';
 import { useGame } from '../../state/store.js';
+import { useNet } from '../../net/net.js';
+import { premiumSummon } from '../../net/net.js';
 import { audio } from '../../game/audio.js';
 import { Modal } from '../Panels.js';
 import { MonImg } from '../components.js';
@@ -20,9 +22,23 @@ export function SummonPanel() {
   const summon = useGame((s) => s.summon);
   const closePanel = useGame((s) => s.closePanel);
   const showToast = useGame((s) => s.showToast);
+  const summonPhase = useNet((s) => s.summonPhase);
+  const summonReport = useNet((s) => s.summonReport);
+  const onchainSummon = useNet((s) => s.onchainSummon);
+  const clearSummonReport = useNet((s) => s.clearSummonReport);
   const [bannerId, setBannerId] = useState('featured');
   const [report, setReport] = useState<SummonReport | null>(null);
   if (!save) return null;
+
+  const busy = summonPhase !== 'idle';
+  const phaseLabel =
+    summonPhase === 'quoting' ? 'Pricing in $AETHER…'
+    : summonPhase === 'signing' ? 'Approve the payment in your wallet…'
+    : summonPhase === 'verifying' ? 'Confirming on-chain…'
+    : null;
+  // One reveal for either path — free ◈ pulls (local) or paid $AETHER pulls (server).
+  const activeReport = report ?? summonReport;
+  const closeReveal = () => { setReport(null); clearSummonReport(); };
 
   const banner = getBanner(bannerId);
   const cost1 = summonCost(bannerId, 1);
@@ -81,17 +97,28 @@ export function SummonPanel() {
         </div>
 
         <div className="rift-actions">
-          <button className="btn big" disabled={balance(cost1.currency) < cost1.amount} onClick={() => pull(1)}>
+          <button className="btn big" disabled={busy || balance(cost1.currency) < cost1.amount} onClick={() => pull(1)}>
             Summon ×1 <span className="cost">{icon(cost1.currency)} {cost1.amount.toLocaleString()}</span>
           </button>
-          <button className="btn big gold" disabled={balance(cost10.currency) < cost10.amount} onClick={() => pull(10)}>
+          <button className="btn big gold" disabled={busy || balance(cost10.currency) < cost10.amount} onClick={() => pull(10)}>
             Summon ×10 <span className="cost">{icon(cost10.currency)} {cost10.amount.toLocaleString()}</span>
           </button>
         </div>
+
+        {onchainSummon && (
+          <div className="rift-premium">
+            <div className="small muted">Out of ◈? Skip the grind — summon instantly with your <b>$AETHER</b> token:</div>
+            <div className="rift-actions">
+              <button className="btn" disabled={busy} onClick={() => premiumSummon(bannerId, 1)}>Pay $AETHER ×1</button>
+              <button className="btn gold" disabled={busy} onClick={() => premiumSummon(bannerId, 10)}>Pay $AETHER ×10</button>
+            </div>
+            {phaseLabel && <div className="small premium-status">{phaseLabel}</div>}
+          </div>
+        )}
       </div>
 
-      {report && createPortal(
-        <SummonReveal report={report} onClose={() => setReport(null)} />,
+      {activeReport && createPortal(
+        <SummonReveal report={activeReport} onClose={closeReveal} />,
         document.body,
       )}
     </Modal>

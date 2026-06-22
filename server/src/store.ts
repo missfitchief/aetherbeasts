@@ -51,6 +51,7 @@ export class Store {
   private byWallet = new Map<string, string>();
   private pool: Pool | null = null;
   private writeChains = new Map<string, Promise<unknown>>();
+  private usedSigs = new Set<string>(); // in-memory single-use fallback when no DB
 
   async init() {
     if (!DATABASE_URL) {
@@ -65,6 +66,14 @@ export class Store {
         wallet text UNIQUE,
         data jsonb NOT NULL,
         updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    // Durable single-use ledger for on-chain payment signatures (survives
+    // restarts + horizontal scaling, so a paid tx can never be replayed).
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS used_tx_sigs (
+        sig text PRIMARY KEY,
+        used_at timestamptz NOT NULL DEFAULT now()
       );
     `);
     const { rows } = await this.pool.query('SELECT data FROM players');
@@ -189,9 +198,31 @@ export class Store {
   saveProgress(id: string, save: SaveData) {
     const rec = this.byId.get(id);
     if (!rec) return;
+    // Drop a stale snapshot: a late, in-flight pre-summon push must not clobber a
+    // newer server-authored save (e.g. a paid pull that just granted beasts).
+    if (rec.save && (save.updatedAt ?? 0) < (rec.save.updatedAt ?? 0)) return;
     rec.name = cleanName(save.playerName) || rec.name; // same sanitizer as account creation
     rec.save = save;
     this.queuePersist(rec);
+  }
+
+  /**
+   * Atomically claim an on-chain payment signature as used (single-use). Returns
+   * false if it was already consumed. Durable when a DB is present; otherwise an
+   * in-memory set (which, by design, never wholesale-clears).
+   */
+  async markTxUsed(sig: string): Promise<boolean> {
+    if (this.pool) {
+      try {
+        const res = await this.pool.query('INSERT INTO used_tx_sigs (sig) VALUES ($1) ON CONFLICT DO NOTHING', [sig]);
+        return res.rowCount === 1; // 1 = freshly inserted, 0 = already present
+      } catch {
+        return false; // DB error → fail closed (deny rather than risk a double-grant)
+      }
+    }
+    if (this.usedSigs.has(sig)) return false;
+    this.usedSigs.add(sig);
+    return true;
   }
 
   // --- authoritative wager-currency mutations (server-only) ------------------

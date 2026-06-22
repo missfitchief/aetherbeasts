@@ -20,6 +20,7 @@
     "test:server": "node --import tsx server/test/pvp.e2e.ts",
     "test:auth": "node --import tsx server/test/wallet-auth.e2e.ts",
     "test:payments": "node --import tsx server/test/payments.test.ts",
+    "test:store": "node --import tsx server/test/store.test.ts",
     "typecheck": "npm -w shared run typecheck && npm -w @aether/server run typecheck && npm -w client run typecheck",
     "assets": "node tools/extract-assets.mjs"
   },

@@ -1,16 +1,31 @@
-import { AETHER_MINT, AETHER_PRICE_FLOOR_USD, summonUsd } from './config.js';
+import {
+  AETHER_MINT, AETHER_PRICE_FLOOR_USD, AETHER_PRICE_MIN_USD, AETHER_PRICE_MAX_USD,
+  AETHER_DECIMALS, summonUsd,
+} from './config.js';
 
 /**
  * Live $AETHER/USD price for USD-pegged summon pricing, so a pull costs ~the same
- * dollars no matter how far the token pumps. Cached ~60s; falls back to a floor
- * price on a feed outage so we never charge absurd amounts.
+ * dollars no matter how far the token pumps. Cached ~60s. A fetched price is only
+ * trusted if it is finite, positive, inside an absolute sane band, and within 10x
+ * of the last good price; otherwise we fall back to the last-good cache or the
+ * configured floor — so one bad/garbage feed tick can't wildly over/under-charge.
  */
 let cached: { price: number; at: number } | null = null;
 const PRICE_TTL_MS = 60_000;
+const MAX_JUMP = 10; // reject a refresh that moves >10x from the last good price
 
-/** Pure: how many $AETHER cover `usd` at `priceUsd`. Floors price defensively. */
+/** Is a fetched price worth trusting (finite, positive, in-band, no wild jump)? */
+function sane(price: number | null): price is number {
+  if (price == null || !Number.isFinite(price) || price <= 0) return false;
+  if (price < AETHER_PRICE_MIN_USD || price > AETHER_PRICE_MAX_USD) return false;
+  if (cached && (price > cached.price * MAX_JUMP || price < cached.price / MAX_JUMP)) return false;
+  return true;
+}
+
+/** Pure: how many $AETHER (UI units) cover `usd` at `priceUsd`. Floors defensively. */
 export function quoteAether(usd: number, priceUsd: number): number {
-  const p = priceUsd > 0 ? priceUsd : AETHER_PRICE_FLOOR_USD;
+  if (!Number.isFinite(usd) || usd <= 0) throw new Error('bad usd');
+  const p = Number.isFinite(priceUsd) && priceUsd > 0 ? priceUsd : AETHER_PRICE_FLOOR_USD;
   return usd / p;
 }
 
@@ -36,13 +51,14 @@ export async function aetherUsdPrice(): Promise<number> {
   const now = Date.now();
   if (cached && now - cached.at < PRICE_TTL_MS) return cached.price;
   const fetched = await fetchPrice();
-  const price = fetched && fetched > 0 ? fetched : AETHER_PRICE_FLOOR_USD;
+  const price = sane(fetched) ? fetched : cached?.price ?? AETHER_PRICE_FLOOR_USD;
   cached = { price, at: now };
   return price;
 }
 
 export interface SummonQuote {
-  aetherAmount: number;
+  aetherAmount: number;     // UI units (display)
+  aetherBaseUnits: string;  // exact integer base units to transfer
   priceUsd: number;
   usd: number;
 }
@@ -51,5 +67,8 @@ export interface SummonQuote {
 export async function summonAetherQuote(count: number): Promise<SummonQuote> {
   const priceUsd = await aetherUsdPrice();
   const usd = summonUsd(count);
-  return { aetherAmount: quoteAether(usd, priceUsd), priceUsd, usd };
+  const aetherAmount = quoteAether(usd, priceUsd);
+  // Round UP to whole base units so the player never pays below the quote.
+  const aetherBaseUnits = BigInt(Math.ceil(aetherAmount * Math.pow(10, AETHER_DECIMALS))).toString();
+  return { aetherAmount, aetherBaseUnits, priceUsd, usd };
 }

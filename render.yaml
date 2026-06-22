@@ -21,9 +21,22 @@ services:
       - key: CLIENT_ORIGIN
         value: "*" # tighten to your client origin in production
       - key: TOKEN_MODE
-        value: sim # flip to "devnet" + set AETHER_MINT once a devnet token exists
+        value: sim # flip to "devnet"/"mainnet" + set AETHER_MINT once a token exists
+      # --- on-chain $AETHER gacha (set ALL of these to go live) ---
       # - key: AETHER_MINT
-      #   value: "<your SPL mint address>"
+      #   value: "<your pump.fun SPL mint address>"
+      # - key: TREASURY_ADDRESS
+      #   value: "<the wallet premium summons pay into>"
+      # - key: AETHER_DECIMALS
+      #   value: "6"
+      # - key: SUMMON_USD_1
+      #   value: "1.5"
+      # - key: SUMMON_USD_10
+      #   value: "13.5"
+      # - key: AETHER_PRICE_FLOOR_USD
+      #   value: "0.00005"   # set near your launch price
+      # - key: SOLANA_RPC
+      #   value: "<a paid mainnet RPC — Helius/QuickNode>"
       # - key: DATABASE_URL    # optional Postgres for durable accounts
       #   fromDatabase:
       #     name: aetherbeasts-db
