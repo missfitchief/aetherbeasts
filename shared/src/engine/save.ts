@@ -6,7 +6,7 @@ import { createCreature } from './factory.js';
 import { statOf } from './formulas.js';
 import type { RNG } from './rng.js';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 const BOX_TOTAL = BOX_PAGE_SIZE * BOX_PAGES;
 
 /** Onboarding balance: enough $AETHER for a featured 10-pull + some shop runs. */
@@ -37,6 +37,7 @@ export function newSave(playerId: string, playerName: string): SaveData {
     ],
     position: { ...SPAWN },
     lastHeal: { ...SHRINE },
+    incubator: { lastTick: 0 }, // stamped to "now" when the journey actually starts
     playtimeSteps: 0,
     seenIntro: false,
     createdAt: 0,
@@ -139,6 +140,11 @@ export function normalizeSave(save: SaveData): SaveData {
   if (!save.gachaPity) save.gachaPity = {};
   for (const c of save.party) if (typeof c.stars !== 'number') c.stars = 0;
   for (const c of save.box) if (c && typeof c.stars !== 'number') c.stars = 0;
+  // Incubator added in v4 — start accrual from the last play so returning
+  // players find a batch waiting (bounded by the cap).
+  if (!save.incubator || typeof save.incubator.lastTick !== 'number') {
+    save.incubator = { lastTick: save.updatedAt || save.createdAt || 0 };
+  }
   save.version = SAVE_VERSION;
   return save;
 }

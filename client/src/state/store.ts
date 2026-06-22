@@ -2,14 +2,15 @@ import { create } from 'zustand';
 import {
   newSave, chooseStarter, storeCreature, healParty, addItem,
   normalizeSave, summon as engineSummon, canAfford, defaultRng, awaken as engineAwaken,
-  type SaveData, type Creature, type SummonReport,
+  claimIncubator as engineClaimIncubator,
+  type SaveData, type Creature, type SummonReport, type IncubatorClaim,
 } from '@aether/shared';
 import { saveAdapter, getOrCreatePlayerId } from './persistence.js';
 
 export interface SlotLoc { zone: 'party' | 'box'; index: number }
 
 export type Screen = 'title' | 'starter' | 'playing';
-export type Panel = null | 'menu' | 'party' | 'box' | 'dex' | 'bag' | 'shop' | 'summary' | 'summon';
+export type Panel = null | 'menu' | 'party' | 'box' | 'dex' | 'bag' | 'shop' | 'summary' | 'summon' | 'incubator';
 
 export interface DialogueState {
   lines: string[];
@@ -53,6 +54,7 @@ interface GameStore {
   heal: () => void;
   buyItem: (itemId: string, price: number) => boolean;
   summon: (bannerId: string, count: number) => SummonReport | null;
+  claimIncubator: () => IncubatorClaim;
   addAether: (n: number) => void;
   awaken: (targetUid: string, fodderUid: string) => boolean;
 
@@ -109,6 +111,7 @@ export const useGame = create<GameStore>((set, get) => ({
     if (!save) return;
     chooseStarter(save, speciesId);
     save.createdAt = save.createdAt || Date.now();
+    save.incubator.lastTick = Date.now(); // start the incubator clock now
     save.updatedAt = Date.now();
     saveAdapter.save(save);
     set({ save: { ...save }, screen: 'playing', version: get().version + 1 });
@@ -222,6 +225,17 @@ export const useGame = create<GameStore>((set, get) => ({
     saveAdapter.save(save);
     set({ save: { ...save }, version: get().version + 1 });
     return report;
+  },
+
+  claimIncubator() {
+    const { save } = get();
+    if (!save) return { beasts: [], aether: 0 };
+    const res = engineClaimIncubator(save, Date.now(), defaultRng);
+    if (res.beasts.length || res.aether) {
+      saveAdapter.save(save);
+      set({ save: { ...save }, version: get().version + 1 });
+    }
+    return res;
   },
 
   addAether(n) {

@@ -160,6 +160,8 @@ export interface SaveData {
   position: { map: string; x: number; y: number; facing: Direction };
   /** Where `Heal` returns the player (last shrine). */
   lastHeal: { map: string; x: number; y: number };
+  /** Aether Incubator (passive beast faucet): epoch ms of the last accrual boundary. */
+  incubator: { lastTick: number };
   playtimeSteps: number;
   /** First-run tutorial shown? */
   seenIntro: boolean;

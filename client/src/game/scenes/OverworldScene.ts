@@ -116,11 +116,14 @@ export class OverworldScene extends Phaser.Scene {
     this.cameras.main.roundPixels = true;
 
     this.keys = this.input.keyboard!.addKeys(
-      'W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,E,Z,ENTER,M,B',
+      'W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,E,Z,ENTER,M,B,ESC',
     ) as Record<string, Phaser.Input.Keyboard.Key>;
 
     this.input.keyboard!.on('keydown-M', () => useGame.getState().openPanel('menu'));
     this.input.keyboard!.on('keydown-B', () => useGame.getState().openPanel('bag'));
+    // ESC = universal "back": close a panel, dismiss a dialogue, or step out of
+    // a building. Always available so you can never get stuck inside.
+    this.input.keyboard!.on('keydown-ESC', () => this.handleBack());
 
     // Floating "Space" prompt shown when facing something interactable.
     this.prompt = this.add
@@ -242,6 +245,20 @@ export class OverworldScene extends Phaser.Scene {
 
   private interactKeyDown(): boolean {
     return this.down('SPACE') || this.down('E') || this.down('Z') || this.down('ENTER');
+  }
+
+  /** Universal "back": close a panel, dismiss a dialogue, or step out of a building. */
+  private handleBack(): void {
+    const g = useGame.getState();
+    if (g.panel) { g.closePanel(); return; }
+    if (g.dialogue) { useGame.setState({ dialogue: null }); return; }
+    if (this.world.kind === 'interior' && !this.busy) {
+      const exit = this.world.warps[0]; // the door back out to the overworld
+      if (exit) {
+        audio.sfx('sfx_ok', 0.3);
+        this.switchMap(exit.toMap, exit.toX, exit.toY, exit.facing ?? 'down');
+      }
+    }
   }
 
   // --- input loop ---

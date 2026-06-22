@@ -1,4 +1,5 @@
-import { dexCounts } from '@aether/shared';
+import { useEffect, useState } from 'react';
+import { dexCounts, incubatorReady } from '@aether/shared';
 import { useGame } from '../state/store.js';
 import { useNet } from '../net/net.js';
 
@@ -18,14 +19,22 @@ export function Hud() {
   const balance = useNet((s) => s.balance);
   const online = useNet((s) => s.status === 'online');
   const setArena = useNet((s) => s.setArena);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 15_000); // refresh the incubator badge
+    return () => clearInterval(id);
+  }, []);
   if (!save) return null;
 
+  const inside = (save.position?.map ?? 'world') !== 'world';
   const inForest = (save.position?.y ?? 0) >= 24;
   const { caught } = dexCounts(save);
+  const incuReady = incubatorReady(save, Date.now());
 
   return (
     <div className="hud">
-      <div className="pill">🧭 {inForest ? 'Whisperwood Route' : 'Aether Town'}</div>
+      <div className="pill">{inside ? '🚪 Indoors' : `🧭 ${inForest ? 'Whisperwood Route' : 'Aether Town'}`}</div>
+      {inside && <div className="pill esc-hint">⎋ Press ESC to leave</div>}
       <div className="pill">◈ {save.aether.toLocaleString()} $AETHER</div>
       {profile && <div className="pill" title="Battle Credits — staked in PvP, never cashed out">⚔ {profile.credits.toLocaleString()} BC</div>}
       {balance && <div className="pill" title={`On-chain $AETHER balance (${balance.mode})`}>⛓ {balance.amount.toLocaleString()} {balance.mode === 'sim' ? '$AETHER·sim' : '$AETHER'}</div>}
@@ -33,6 +42,9 @@ export function Hud() {
       <div className="spacer" />
       {!panel && (
         <>
+          <button className="icon-btn incu-btn" title="Aether Incubator — passive beasts" onClick={() => openPanel('incubator')}>
+            🥚{incuReady > 0 && <span className="incu-badge">{incuReady}</span>}
+          </button>
           <button className={'icon-btn arena-btn' + (online ? '' : ' off')} title={online ? 'The Aether Arena — PvP' : 'Arena server offline'} onClick={() => setArena(true)}>⚔</button>
           <button className="icon-btn rift-btn" title="The Aether Rift — summon beasts" onClick={() => openPanel('summon')}>✦</button>
           <button className="icon-btn" title="Bag (B)" onClick={() => openPanel('bag')}>🎒</button>

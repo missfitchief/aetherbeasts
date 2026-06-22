@@ -571,3 +571,21 @@ html, body, #root {
 .pvp-bench:disabled { opacity: 0.4; cursor: default; }
 .pvp-actions-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 .btn.danger, .btn.ghost.danger { border-color: var(--bad); color: var(--bad); }
+
+/* ---- Aether Incubator (passive beast faucet) ---- */
+.icon-btn.incu-btn { position: relative; border-color: var(--good); }
+.incu-badge { position: absolute; top: -6px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--good); color: #06210d; font-size: 11px; font-weight: 800; line-height: 16px; text-align: center; box-shadow: 0 0 6px var(--good); }
+.incu { display: flex; flex-direction: column; gap: 12px; }
+.incu-eggs { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
+.incu-egg { font-size: 22px; filter: grayscale(1) opacity(0.3); transition: filter 0.2s; }
+.incu-egg.filled { filter: none; animation: incuPop 0.3s ease-out; }
+@keyframes incuPop { from { transform: scale(0.6); } to { transform: scale(1); } }
+.incu-status { display: flex; gap: 10px; }
+.incu-status > div { flex: 1; text-align: center; background: var(--panel2); border: 2px solid var(--line); border-radius: 8px; padding: 8px 4px; }
+.incu-big { display: block; font-size: 20px; font-weight: 800; color: var(--accent2); }
+.incu-status label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.incu-reveal { position: fixed; inset: 0; z-index: 70; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(6,10,22,0.86); backdrop-filter: blur(3px); }
+.incu-reveal-head { font-size: 26px; font-weight: 800; color: var(--good); letter-spacing: 2px; }
+.incu-reveal-grid { display: grid; grid-template-columns: repeat(auto-fit, 76px); gap: 10px; max-width: 520px; justify-content: center; }
+.incu-card { display: flex; flex-direction: column; align-items: center; gap: 2px; background: var(--panel); border: 2px solid var(--steel); border-radius: 8px; padding: 8px 4px; animation: incuPop 0.3s ease-out; }
+.pill.esc-hint { border-color: var(--accent2); color: var(--accent2); }

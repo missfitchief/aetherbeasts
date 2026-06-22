@@ -8,6 +8,7 @@ import { SummaryPanel } from './panels/SummaryPanel.js';
 import { BagPanel } from './panels/BagPanel.js';
 import { ShopPanel } from './panels/ShopPanel.js';
 import { SummonPanel } from './panels/SummonPanel.js';
+import { IncubatorPanel } from './panels/IncubatorPanel.js';
 
 export function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
   return (
@@ -45,6 +46,8 @@ export function Panels() {
       return <ShopPanel />;
     case 'summon':
       return <SummonPanel />;
+    case 'incubator':
+      return <IncubatorPanel />;
     default:
       return null;
   }
