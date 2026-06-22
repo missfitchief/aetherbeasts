@@ -572,3 +572,4 @@ html, body, #root {
 .pvp-actions-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 .btn.danger, .btn.ghost.danger { border-color: var(--bad); color: var(--bad); }
 .pill.esc-hint { border-color: var(--accent2); color: var(--accent2); }
+.pill.wild-pill.ready { border-color: var(--good); color: var(--good); box-shadow: 0 0 8px rgba(83,215,105,0.4); }
