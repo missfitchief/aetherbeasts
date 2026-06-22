@@ -159,14 +159,26 @@ export function canAfford(save: SaveData, bannerId: string, count: number): bool
   return (save[currency] ?? 0) >= amount;
 }
 
-/** Perform `count` pulls on a banner, mutating `save`. Returns a per-pull report. */
-export function summon(save: SaveData, bannerId: string, count: number, rng: RNG): SummonReport {
+/**
+ * Perform `count` pulls on a banner, mutating `save`. Returns a per-pull report.
+ * `prepaid: true` skips the in-game ◈ charge — used by the SERVER when the pull
+ * was already paid for on-chain in $AETHER (verified before this is called).
+ */
+export function summon(
+  save: SaveData,
+  bannerId: string,
+  count: number,
+  rng: RNG,
+  opts: { prepaid?: boolean } = {},
+): SummonReport {
   const banner = getBanner(bannerId);
   const cost = summonCost(bannerId, count);
-  if ((save[cost.currency] ?? 0) < cost.amount) {
-    throw new Error('Insufficient currency for summon');
+  if (!opts.prepaid) {
+    if ((save[cost.currency] ?? 0) < cost.amount) {
+      throw new Error('Insufficient currency for summon');
+    }
+    save[cost.currency] -= cost.amount;
   }
-  save[cost.currency] -= cost.amount;
 
   save.gachaPity ??= {};
   const pity = (save.gachaPity[bannerId] ??= emptyPity());
@@ -184,7 +196,7 @@ export function summon(save: SaveData, bannerId: string, count: number, rng: RNG
     results.push({ speciesId, tier, isDupe, aetherAwarded, shiny: creature.shiny, creatureUid: creature.uid, to });
   }
   if (aetherGained > 0) save.aether = (save.aether ?? 0) + aetherGained;
-  return { results, spent: cost, aetherGained };
+  return { results, spent: opts.prepaid ? { currency: cost.currency, amount: 0 } : cost, aetherGained };
 }
 
 /** Best tier in a report — for reveal flourish. */

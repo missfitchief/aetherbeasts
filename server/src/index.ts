@@ -2,11 +2,12 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { Server, type Socket } from 'socket.io';
 import type { SaveData, PlayerAction } from '@aether/shared';
-import { DAILY_CREDIT_FLOOR } from '@aether/shared';
-import { PORT, CLIENT_ORIGIN } from './config.js';
+import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng } from '@aether/shared';
+import { PORT, CLIENT_ORIGIN, summonPriceAether } from './config.js';
 import { Store, publicProfile, type PlayerRecord } from './store.js';
 import { buildLoginMessage, verifySignature } from './auth.js';
 import { aetherBalance } from './balance.js';
+import { verifyAetherPayment } from './payments.js';
 import { MatchManager } from './match.js';
 
 const store = new Store();
@@ -101,6 +102,27 @@ function bind(socket: Socket) {
     const id = pid();
     if (!id || !p?.matchId) return;
     matches.forfeit(id, p.matchId);
+  });
+
+  // Premium gacha paid on-chain in $AETHER. We verify the transfer on-chain, then
+  // run the pull server-side (server RNG + the player's pity) so it can't be
+  // forged, and return the authoritative updated save.
+  socket.on('summon:onchain', async (p: { txSig: string; bannerId: string; count: number }) => {
+    const id = pid();
+    if (!id || !p || typeof p.txSig !== 'string' || typeof p.bannerId !== 'string') return;
+    const count = Number(p.count) >= 10 ? 10 : 1;
+    const check = await verifyAetherPayment(p.txSig, summonPriceAether(count));
+    if (!check.ok) return socket.emit('summon:error', { message: check.reason ?? 'Payment not verified.' });
+    const rec = store.getById(id);
+    if (!rec?.save) return socket.emit('summon:error', { message: 'Play and save first, then summon.' });
+    try {
+      const seed = (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0;
+      const report = engineSummon(rec.save, p.bannerId, count, seededRng(seed), { prepaid: true });
+      store.saveProgress(id, rec.save);
+      socket.emit('summon:result', { report, save: rec.save });
+    } catch {
+      socket.emit('summon:error', { message: 'Summon could not be completed.' });
+    }
   });
 
   socket.on('disconnect', () => {

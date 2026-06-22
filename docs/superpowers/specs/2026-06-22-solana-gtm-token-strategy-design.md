@@ -69,6 +69,17 @@ New build is mostly **read-side** (points aggregation, leaderboard page, public 
 
 **Season 0 points leaderboard** (Phase A.1) — a read-only server aggregation + a leaderboard view, plus publishing gacha odds and the no-rug commitment. Lowest risk, immediate engagement, zero token exposure, and it's the data foundation the eventual retroactive airdrop is computed from.
 
+## 7a. ADDENDUM (2026-06-22) — pump.fun launch + $AETHER as gacha currency (supersedes the Phase A→C delay)
+
+User decision: **launch `$AETHER` on pump.fun now**, then implement it in-game as the **spend currency for gacha + shop**, then go live. This pulls the token forward (vs the "token-later" phasing above). Build architecture:
+
+- **Pay-per-summon, verified on-chain (NO custody).** To buy a premium pull, the client builds an SPL transfer of `$AETHER` to the game **treasury** and the player signs it (Phantom `signAndSendTransaction`). The server **verifies the transfer on-chain** (mint == `$AETHER`, amount ≥ price, recipient == treasury, confirmed, and the tx signature not already used — replay-proof), then runs the gacha with **server-owned RNG + the published pity** and writes the resulting beasts to the player's save. No custodial in-game token balance ⇒ lighter money-transmission profile than a deposit/withdraw wallet.
+- **One-way only.** Beasts are non-tradable (no NFTs); there is **no withdrawal / cash-out** of anything into `$AETHER`. The free/earned **◈** path (battle rewards, dupes) remains for non-payers and standard pulls.
+- **Battle Credits stay separate + non-cashable** — the cashable `$AETHER` is never wagered in PvP.
+- **Devnet first, flip-ready.** Built + tested against a devnet `$AETHER` mint; going live = set `AETHER_MINT` + `TREASURY` + `TOKEN_MODE=mainnet` to the pump.fun values.
+- **Go-live checklist:** (1) `$AETHER` live on pump.fun; (2) treasury wallet set; (3) **counsel sign-off on the custodial/loot-box/MSB questions** (user's compliance step); (4) publish odds; (5) flip config; (6) deploy server (Render) + client (`VITE_SERVER_URL`).
+- Hard lines from §4 still bind: never market `$AETHER` as an investment; no cashable wagering; no cash-out.
+
 ## 8. Out of scope (for now)
 
 On-chain wagering / pot-to-winner · cashable `$AETHER` · the PvP prediction/esports layer (Phase 2 of a later cycle, counsel-gated) · NFTs · any public token sale framed as investment.

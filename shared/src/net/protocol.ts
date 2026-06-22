@@ -12,6 +12,7 @@
  */
 import type { SaveData, Creature } from '../types.js';
 import type { BattleEvent, PlayerAction } from '../engine/battle.js';
+import type { SummonReport } from '../engine/gacha.js';
 
 export type Outcome = 'win' | 'lose' | 'draw';
 
@@ -112,6 +113,10 @@ export interface ServerToClient {
   'battle:yourTurn': (p: { matchId: string; turn: number; deadline: number }) => void;
   'match:over': (p: MatchOver) => void;
   'opponent:left': (p: { matchId: string; message: string }) => void;
+  // On-chain ($AETHER) gacha: the server verifies the payment, runs the pull,
+  // and returns the result + the authoritative updated save.
+  'summon:result': (p: { report: SummonReport; save: SaveData }) => void;
+  'summon:error': (p: { message: string }) => void;
   'error': (p: { message: string }) => void;
 }
 
@@ -125,4 +130,7 @@ export interface ClientToServer {
   'match:cancel': () => void;
   'battle:action': (p: BattleActionMsg) => void;
   'battle:forfeit': (p: { matchId: string }) => void;
+  /** Premium gacha paid on-chain: client sends the confirmed $AETHER-transfer
+   *  signature; the server verifies it before granting the pull. */
+  'summon:onchain': (p: { txSig: string; bannerId: string; count: number }) => void;
 }
