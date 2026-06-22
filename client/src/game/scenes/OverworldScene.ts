@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import {
   ENCOUNTER_ZONES, scaledWildLevel, createCreature, weightedPick, defaultRng, getSpecies, SPECIES_ORDER,
-  pendingEvolution, evolve, displayName,
+  pendingEvolution, evolve, displayName, wildCount, consumeWild,
   type Creature, type Direction,
 } from '@aether/shared';
 import { getMap, TILE, ROUTE_START_Y, OBJ_DEF, type WorldMap, type Tile, type Npc, type Interactable } from '../world/maps.js';
@@ -380,10 +380,19 @@ export class OverworldScene extends Phaser.Scene {
       this.tweens.add({ targets: r, alpha: 0, scaleY: 1.2, duration: 280, onComplete: () => r.destroy() });
       audio.sfx('sfx_move', 0.12);
       if (tile.zone) {
-        const caught = Object.values(useGame.getState().save!.dex).filter((e) => e.caught).length;
+        const save = useGame.getState().save!;
+        const now = Date.now();
+        // Encounters are gated by the timed wild pool: a beast becomes available
+        // every ~15 min (slower + fewer as your team levels), refilling even while
+        // you're away. You stumble on one by walking; each fight consumes one slot.
+        const available = wildCount(save, now);
+        const caught = Object.values(save.dex).filter((e) => e.caught).length;
         const forceFirst = this.firstGrassStep && caught <= 1;
         this.firstGrassStep = false;
-        if (forceFirst || Math.random() < ENCOUNTER_CHANCE) this.startEncounter(tile.zone);
+        if (available > 0 && (forceFirst || Math.random() < ENCOUNTER_CHANCE)) {
+          consumeWild(save, now); // claim this beast from the pool (persisted by startEncounter)
+          this.startEncounter(tile.zone);
+        }
       }
     }
   }

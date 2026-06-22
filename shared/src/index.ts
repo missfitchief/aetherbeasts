@@ -20,4 +20,4 @@ export * from './engine/progression.js';
 export * from './engine/battle.js';
 export * from './engine/save.js';
 export * from './engine/gacha.js';
-export * from './engine/incubator.js';
+export * from './engine/wildspawn.js';

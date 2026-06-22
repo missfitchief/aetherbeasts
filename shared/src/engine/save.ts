@@ -6,7 +6,7 @@ import { createCreature } from './factory.js';
 import { statOf } from './formulas.js';
 import type { RNG } from './rng.js';
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 const BOX_TOTAL = BOX_PAGE_SIZE * BOX_PAGES;
 
 /** Onboarding balance: enough $AETHER for a featured 10-pull + some shop runs. */
@@ -37,7 +37,7 @@ export function newSave(playerId: string, playerName: string): SaveData {
     ],
     position: { ...SPAWN },
     lastHeal: { ...SHRINE },
-    incubator: { lastTick: 0 }, // stamped to "now" when the journey actually starts
+    wild: { lastTick: 0 }, // 0 => the forest starts FULL of beasts to catch
     playtimeSteps: 0,
     seenIntro: false,
     createdAt: 0,
@@ -140,11 +140,10 @@ export function normalizeSave(save: SaveData): SaveData {
   if (!save.gachaPity) save.gachaPity = {};
   for (const c of save.party) if (typeof c.stars !== 'number') c.stars = 0;
   for (const c of save.box) if (c && typeof c.stars !== 'number') c.stars = 0;
-  // Incubator added in v4 — start accrual from the last play so returning
-  // players find a batch waiting (bounded by the cap).
-  if (!save.incubator || typeof save.incubator.lastTick !== 'number') {
-    save.incubator = { lastTick: save.updatedAt || save.createdAt || 0 };
-  }
+  // Wild forest spawns (v5). lastTick 0 => a full forest (bounded by the cap).
+  const legacyIncubator = (save as unknown as { incubator?: unknown }).incubator;
+  if (!save.wild || typeof save.wild.lastTick !== 'number') save.wild = { lastTick: 0 };
+  if (legacyIncubator) delete (save as unknown as { incubator?: unknown }).incubator;
   save.version = SAVE_VERSION;
   return save;
 }
