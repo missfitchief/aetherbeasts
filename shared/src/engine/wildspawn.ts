@@ -29,9 +29,14 @@ export function wildIntervalMs(level: number): number {
   return wildIntervalMin(level) * MS_PER_MIN;
 }
 
-/** Max beasts roaming the forest at once — shrinks with progression (12 → 4). */
-export function wildCap(level: number): number {
-  return Math.min(12, Math.max(4, Math.round(12 - clampLevel(level) / 10)));
+/**
+ * Only ONE wild beast is ever available at a time — the pool never banks. After
+ * an interval a single beast appears and simply waits (no accumulation) until you
+ * encounter it; then the timer resets. Waiting 10 h still yields just one. "Fewer
+ * at higher level" comes entirely from the interval getting longer.
+ */
+export function wildCap(_level: number): number {
+  return 1;
 }
 
 // Accrual start, pinned no further back than `cap` intervals so the count is

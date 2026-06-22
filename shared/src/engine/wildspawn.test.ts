@@ -13,35 +13,37 @@ function saveAtLevel(level: number) {
 const intervalMs = (s: ReturnType<typeof saveAtLevel>) => wildIntervalMin(forestLevel(s)) * MIN;
 
 describe('wild forest spawns', () => {
-  it('interval grows and cap shrinks with progression', () => {
+  it('interval grows with level; only ever ONE beast available (no banking)', () => {
     expect(wildIntervalMin(1)).toBe(15);
     expect(wildIntervalMin(50)).toBeGreaterThan(wildIntervalMin(10));
-    expect(wildCap(1)).toBe(12);
-    expect(wildCap(100)).toBe(4);
-    expect(wildCap(10)).toBeGreaterThan(wildCap(90));
+    expect(wildIntervalMin(100)).toBeGreaterThan(wildIntervalMin(50));
+    expect(wildCap(1)).toBe(1);
+    expect(wildCap(100)).toBe(1);
   });
 
-  it('a fresh save starts with a FULL forest', () => {
-    const s = saveAtLevel(5); // lastTick defaults to 0 -> full
-    expect(wildCount(s, 9_999_999_999)).toBe(wildCap(forestLevel(s)));
+  it('NEVER banks more than one, even after a very long wait', () => {
+    const s = saveAtLevel(5);
+    const t = intervalMs(s);
+    expect(wildCount(s, t)).toBe(1);          // one after a single interval
+    expect(wildCount(s, t * 40)).toBe(1);     // 40 intervals away -> still just one
+    expect(wildCount(s, 9_999_999_999)).toBe(1);
   });
 
-  it('consuming a beast frees exactly one slot, refilled after one interval', () => {
+  it('one appears after an interval; encountering it resets the timer', () => {
     const s = saveAtLevel(10);
     const t = intervalMs(s);
     const now = 5_000_000_000;
-    const cap = wildCap(forestLevel(s));
-    expect(wildCount(s, now)).toBe(cap); // full
+    expect(wildCount(s, now)).toBe(1); // available (fresh save)
     consumeWild(s, now);
-    expect(wildCount(s, now)).toBe(cap - 1);
-    expect(wildCount(s, now + t + 1)).toBe(cap); // one respawns after an interval
+    expect(wildCount(s, now)).toBe(0);             // gone, timer reset
+    expect(wildCount(s, now + t - 1)).toBe(0);     // still nothing just before the interval
+    expect(wildCount(s, now + t + 1)).toBe(1);     // next one after a full interval
   });
 
-  it('catching the whole forest empties it, and it never goes negative', () => {
+  it('repeated consume never goes negative', () => {
     const s = saveAtLevel(20);
     const now = 5_000_000_000;
-    const cap = wildCap(forestLevel(s));
-    for (let i = 0; i < cap + 3; i++) consumeWild(s, now);
+    for (let i = 0; i < 5; i++) consumeWild(s, now);
     expect(wildCount(s, now)).toBe(0);
   });
 
