@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getMove, getSpecies, statOf, TYPE_COLOR, type Creature } from '@aether/shared';
+import { getMove, getSpecies, statOf, TYPE_COLOR, rankOf, currentSeason, type Creature } from '@aether/shared';
 import { useNet, findMatch, cancelMatch, submitMove, submitSwitch, forfeitMatch, leaveResult } from '../../net/net.js';
 import { useGame } from '../../state/store.js';
 import { MonImg, HpBar } from '../components.js';
@@ -25,6 +25,10 @@ function Lobby() {
   const party = useGame((s) => s.save?.party ?? []);
 
   const credits = profile?.credits ?? 0;
+  const rating = profile?.rating ?? 1000;
+  const rank = rankOf(rating);
+  const season = currentSeason(Date.now());
+  const daysLeft = Math.max(1, Math.ceil((season.endsAt - Date.now()) / 86_400_000));
   const tiers = [50, 100, 250, 500];
   // Closing while searching must also leave the server queue (no ghost entries).
   const close = () => {
@@ -41,10 +45,12 @@ function Lobby() {
         </div>
 
         <div className="arena-sub">Real-time PvP. Stake Battle Credits — winner takes the pot.</div>
+        <div className="arena-sub" style={{ marginTop: -4 }}>Season {season.id} · ends in {daysLeft}d · climb the ladder for Season Points.</div>
 
         <div className="arena-stats">
           <div className="arena-stat"><span>◈ {credits.toLocaleString()}</span><label>Battle Credits</label></div>
-          <div className="arena-stat"><span>{profile?.rating ?? 1000}</span><label>Rating</label></div>
+          <div className="arena-stat"><span>{rating}</span><label>Rating</label></div>
+          <div className="arena-stat"><span style={{ color: rank.color }}>{rank.name}</span><label>Rank</label></div>
           <div className="arena-stat"><span>{profile?.wins ?? 0}–{profile?.losses ?? 0}</span><label>W–L</label></div>
         </div>
 
