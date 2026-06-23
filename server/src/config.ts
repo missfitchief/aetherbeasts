@@ -43,6 +43,11 @@ export const AETHER_PRICE_MAX_USD = Number(process.env.AETHER_PRICE_MAX_USD || 1
  *  paid-but-dropped summon can be re-submitted on reconnect and still redeem. */
 export const QUOTE_TTL_MS = Number(process.env.QUOTE_TTL_MS || 300_000);
 export const ONCHAIN_SUMMON_ENABLED = !!AETHER_MINT && !!TREASURY_ADDRESS;
+/** The LUMEN -> $AETHER Exchange (cash-out). HARD kill-switch, default OFF. Requires
+ *  on-chain summons to be live too (so the pool can be funded + the payout signed).
+ *  NOTE: the live treasury payout signer is intentionally NOT wired in code — turning
+ *  this on with real funds is a deliberate operator step. */
+export const EXCHANGE_ENABLED = process.env.EXCHANGE_ENABLED === 'true' && ONCHAIN_SUMMON_ENABLED;
 export const summonUsd = (count: number): number => (count >= 10 ? SUMMON_USD_10 : SUMMON_USD_1);
 
 /** Fail fast on a misconfigured money path, and log the resolved on-chain state

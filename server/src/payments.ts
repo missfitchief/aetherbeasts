@@ -42,6 +42,9 @@ export function treasuryAetherDelta(
 export interface PaymentCheck {
   ok: boolean;
   reason?: string;
+  /** On success: the $AETHER (base units) that actually landed in the treasury —
+   *  the caller rings 30% of this into the LUMEN Rewards Pool. */
+  toTreasuryBaseUnits?: bigint;
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -92,7 +95,7 @@ export async function verifyAetherPayment(
 
     // Claim single-use LAST, only after every other check passed.
     if (!(await store.markTxUsed(txSig))) return { ok: false, reason: 'this payment was already used' };
-    return { ok: true };
+    return { ok: true, toTreasuryBaseUnits: toTreasury };
   } catch {
     return { ok: false, reason: 'could not verify payment, try again' };
   }

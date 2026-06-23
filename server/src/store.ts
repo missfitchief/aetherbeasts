@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import type { SaveData, PublicProfile, QuestState } from '@aether/shared';
-import { STARTING_CREDITS, freshQuestState, rollOver } from '@aether/shared';
+import { STARTING_CREDITS, freshQuestState, rollOver, MIN_HOLD_DAYS } from '@aether/shared';
 import { DATABASE_URL } from './config.js';
 
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // resume tokens expire after 30 days (sliding)
@@ -26,9 +26,17 @@ export interface PlayerRecord {
   lastDailyTopUp: number;
   tokenExpiresAt: number; // resume token absolute expiry (sliding on each auth)
   quests: QuestState;     // server-authoritative daily/weekly quests + Season Points
+  // --- LUMEN: the cashable token (server-only, like `credits`; NEVER stored in `save`) ---
+  lumen: number;
+  lumenLots: LumenLot[];  // FIFO earn ledger backing the redeem min-hold
+  lumenRedeem: { day: string; dayUsed: number; week: string; weekUsed: number };
+  premiumPurchases: number; // verified premium-pull count (Exchange eligibility gate)
   createdAt: number;
   updatedAt: number;
 }
+
+/** One LUMEN earn event, retained until consumed (min-hold + FIFO accounting). */
+export interface LumenLot { amount: number; earnedAt: number; source: string }
 
 export function publicProfile(p: PlayerRecord): PublicProfile {
   return {
@@ -40,6 +48,7 @@ export function publicProfile(p: PlayerRecord): PublicProfile {
     rating: p.rating,
     wins: p.wins,
     losses: p.losses,
+    lumen: p.lumen ?? 0,
   };
 }
 
@@ -53,6 +62,7 @@ export class Store {
   private pool: Pool | null = null;
   private writeChains = new Map<string, Promise<unknown>>();
   private usedSigs = new Set<string>(); // in-memory single-use fallback when no DB
+  private rewardsPool = 0n; // LUMEN->$AETHER Exchange payout pool ($AETHER base units), persisted in `meta`
 
   async init() {
     if (!DATABASE_URL) {
@@ -83,8 +93,12 @@ export class Store {
           used_at timestamptz NOT NULL DEFAULT now()
         );
       `);
+      // Singleton economy state (the LUMEN Rewards Pool) as a key/value row.
+      await pool.query(`CREATE TABLE IF NOT EXISTS meta (key text PRIMARY KEY, value text NOT NULL);`);
       const { rows } = await pool.query('SELECT data FROM players');
       for (const r of rows) this.index(r.data as PlayerRecord);
+      const { rows: metaRows } = await pool.query(`SELECT value FROM meta WHERE key = 'rewardsPool'`);
+      if (metaRows[0]?.value) { try { this.rewardsPool = BigInt(metaRows[0].value); } catch { /* keep 0 */ } }
       this.pool = pool; // only switch to DB mode once it's fully reachable
       console.log(`[store] postgres mode, hydrated ${rows.length} player(s)`);
     } catch (e) {
@@ -157,6 +171,10 @@ export class Store {
       lastDailyTopUp: 0,
       tokenExpiresAt: Date.now() + TOKEN_TTL_MS,
       quests: freshQuestState(id, Date.now()),
+      lumen: 0,
+      lumenLots: [],
+      lumenRedeem: { day: '', dayUsed: 0, week: '', weekUsed: 0 },
+      premiumPurchases: 0,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -202,6 +220,10 @@ export class Store {
       lastDailyTopUp: 0,
       tokenExpiresAt: Date.now() + TOKEN_TTL_MS,
       quests: freshQuestState(id, Date.now()),
+      lumen: 0,
+      lumenLots: [],
+      lumenRedeem: { day: '', dayUsed: 0, week: '', weekUsed: 0 },
+      premiumPurchases: 0,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -298,6 +320,107 @@ export class Store {
     }
   }
 
+  // --- LUMEN: the cashable token (server-authoritative, like `credits`) -------
+  private ensureLumen(rec: PlayerRecord): void {
+    if (typeof rec.lumen !== 'number') rec.lumen = 0;
+    if (!Array.isArray(rec.lumenLots)) rec.lumenLots = [];
+    if (!rec.lumenRedeem) rec.lumenRedeem = { day: '', dayUsed: 0, week: '', weekUsed: 0 };
+    if (typeof rec.premiumPurchases !== 'number') rec.premiumPurchases = 0;
+  }
+
+  getLumen(id: string): number {
+    const r = this.byId.get(id); if (!r) return 0; this.ensureLumen(r); return r.lumen;
+  }
+  /** Grant LUMEN (server-only: quest/ranked/boss rewards). Records an earn lot for the min-hold. */
+  grantLumen(id: string, amount: number, source: string): void {
+    const r = this.byId.get(id); if (!r || !(amount > 0)) return; this.ensureLumen(r);
+    r.lumen += amount;
+    r.lumenLots.push({ amount, earnedAt: Date.now(), source });
+    this.queuePersist(r);
+  }
+  /** Spend LUMEN on an in-game sink (awaken/spark/cosmetic). Consumes lots FIFO, any age. */
+  spendLumen(id: string, amount: number): boolean {
+    const r = this.byId.get(id); if (!r) return false; this.ensureLumen(r);
+    if (!(amount > 0) || r.lumen < amount) return false;
+    r.lumen -= amount;
+    this.consumeLots(r, amount, Infinity);
+    this.queuePersist(r);
+    return true;
+  }
+  /** Consume `amount` of LUMEN from lots no newer than `maxEarnedAt`, oldest first. */
+  private consumeLots(rec: PlayerRecord, amount: number, maxEarnedAt: number): void {
+    rec.lumenLots.sort((a, b) => a.earnedAt - b.earnedAt);
+    let rem = amount;
+    for (const lot of rec.lumenLots) {
+      if (rem <= 0) break;
+      if (lot.earnedAt > maxEarnedAt) continue;
+      const take = Math.min(lot.amount, rem);
+      lot.amount -= take; rem -= take;
+    }
+    rec.lumenLots = rec.lumenLots.filter((l) => l.amount > 1e-9);
+  }
+  /** LUMEN that has cleared the min-hold and may be redeemed at the Exchange. */
+  redeemableLumen(id: string, now: number): number {
+    const r = this.byId.get(id); if (!r) return 0; this.ensureLumen(r);
+    const cutoff = now - MIN_HOLD_DAYS * 86_400_000;
+    return r.lumenLots.filter((l) => l.earnedAt <= cutoff).reduce((a, l) => a + l.amount, 0);
+  }
+  /** Current day/week redeemed totals (buckets reset lazily here). */
+  redeemUsage(id: string, now: number): { dailyUsed: number; weeklyUsed: number } {
+    const r = this.byId.get(id); if (!r) return { dailyUsed: 0, weeklyUsed: 0 }; this.ensureLumen(r);
+    const day = utcDay(now), week = utcWeek(now);
+    if (r.lumenRedeem.day !== day) { r.lumenRedeem.day = day; r.lumenRedeem.dayUsed = 0; }
+    if (r.lumenRedeem.week !== week) { r.lumenRedeem.week = week; r.lumenRedeem.weekUsed = 0; }
+    return { dailyUsed: r.lumenRedeem.dayUsed, weeklyUsed: r.lumenRedeem.weekUsed };
+  }
+  /** Consume `lumenAccepted` from AGED lots and record the daily/weekly usage. Returns
+   *  false if the player lacks that much redeemable (held) LUMEN. */
+  commitRedeem(id: string, lumenAccepted: number, now: number): boolean {
+    const r = this.byId.get(id); if (!r || !(lumenAccepted > 0)) return false; this.ensureLumen(r);
+    if (this.redeemableLumen(id, now) + 1e-9 < lumenAccepted) return false;
+    this.redeemUsage(id, now); // ensure day/week buckets are current before incrementing
+    const cutoff = now - MIN_HOLD_DAYS * 86_400_000;
+    this.consumeLots(r, lumenAccepted, cutoff);
+    r.lumen = Math.max(0, r.lumen - lumenAccepted);
+    r.lumenRedeem.dayUsed += lumenAccepted;
+    r.lumenRedeem.weekUsed += lumenAccepted;
+    this.queuePersist(r);
+    return true;
+  }
+  recordPremiumPurchase(id: string): void {
+    const r = this.byId.get(id); if (!r) return; this.ensureLumen(r);
+    r.premiumPurchases += 1; this.queuePersist(r);
+  }
+  getPremiumPurchases(id: string): number {
+    const r = this.byId.get(id); if (!r) return 0; this.ensureLumen(r); return r.premiumPurchases;
+  }
+  accountAgeDays(id: string, now: number): number {
+    const r = this.byId.get(id); return r ? (now - r.createdAt) / 86_400_000 : 0;
+  }
+
+  // --- LUMEN Rewards Pool (global singleton; the ONLY source of Exchange payouts) ---
+  getRewardsPool(): bigint { return this.rewardsPool; }
+  /** Credit the pool (from premium-pull revenue or a disclosed dev seed). */
+  addRewardsPool(x: bigint): void {
+    if (x > 0n) { this.rewardsPool += x; void this.persistPool(); }
+  }
+  /** Debit a payout. REQUIRES x <= pool — the solvency invariant (pool never goes negative). */
+  debitRewardsPool(x: bigint): boolean {
+    if (x <= 0n || x > this.rewardsPool) return false;
+    this.rewardsPool -= x; void this.persistPool();
+    return true;
+  }
+  private async persistPool(): Promise<void> {
+    if (!this.pool) return;
+    try {
+      await this.pool.query(
+        `INSERT INTO meta (key, value) VALUES ('rewardsPool', $1)
+         ON CONFLICT (key) DO UPDATE SET value = $1`,
+        [this.rewardsPool.toString()],
+      );
+    } catch { /* best-effort; the in-memory value stays authoritative this run */ }
+  }
+
   leaderboard(limit = 20) {
     return [...this.byId.values()]
       .sort((a, b) => b.rating - a.rating)
@@ -318,3 +441,7 @@ export class Store {
 function cleanName(name?: string): string {
   return (name ?? '').replace(/[^\w \-]/g, '').trim().slice(0, 24);
 }
+
+/** UTC day bucket (YYYY-MM-DD) and a 7-day week bucket — for redeem caps. */
+function utcDay(now: number): string { return new Date(now).toISOString().slice(0, 10); }
+function utcWeek(now: number): string { return String(Math.floor(now / (7 * 86_400_000))); }

@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { Server, type Socket } from 'socket.io';
 import type { SaveData, PlayerAction, SummonReport, QuestProgressType } from '@aether/shared';
-import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, claimLoginReward, addItem, toQuestView } from '@aether/shared';
+import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, claimLoginReward, addItem, toQuestView, poolCreditFromRevenue } from '@aether/shared';
 import { PORT, corsOrigin, TREASURY_ADDRESS, AETHER_MINT, AETHER_DECIMALS, QUOTE_TTL_MS, ONCHAIN_SUMMON_ENABLED, validateConfig } from './config.js';
 import { Store, publicProfile, type PlayerRecord } from './store.js';
 import { buildLoginMessage, verifySignature } from './auth.js';
@@ -193,6 +193,13 @@ function bind(socket: Socket) {
       return socket.emit('summon:error', { message: check.reason ?? 'Payment not verified.' });
     }
     summonQuotes.delete(p.quoteId); // single-use
+    // The verified payment funds the LUMEN Rewards Pool (30% of revenue) and counts
+    // toward the Exchange eligibility gate — the closed loop that bounds cash-out so
+    // total payouts can never exceed 30% of what players actually spent.
+    if (check.toTreasuryBaseUnits && check.toTreasuryBaseUnits > 0n) {
+      store.addRewardsPool(poolCreditFromRevenue(check.toTreasuryBaseUnits));
+    }
+    store.recordPremiumPurchase(id);
     try {
       const seed = (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0;
       const report = engineSummon(rec.save, quote.bannerId, quote.count, seededRng(seed), { prepaid: true });

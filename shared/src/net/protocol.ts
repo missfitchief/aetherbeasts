@@ -36,6 +36,8 @@ export interface PublicProfile {
   rating: number;
   wins: number;
   losses: number;
+  /** Server-authoritative cashable token (LUMEN). 0 until the economy ships. */
+  lumen: number;
 }
 
 export interface AuthOk {
