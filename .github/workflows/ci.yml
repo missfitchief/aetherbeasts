@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests (engine)
+        run: npm test
+
+      - name: Payment + pricing tests
+        run: npm run test:payments
+
+      - name: Store (single-use + save-guard) tests
+        run: npm run test:store
+
+      - name: Wallet-auth e2e
+        run: npm run test:auth
+
+      - name: PvP e2e
+        run: npm run test:server
+
+      - name: Production build
+        run: npm run build

@@ -1,113 +1,103 @@
 # 🐉 Aetherbeasts
 
-An original **2D top-down monster-collector RPG** that runs in the browser.
-**Phase 0** — the fully-playable core game, with **no crypto**: explore a tile
-world, find and battle wild Aetherbeasts, weaken and capture them, build a team,
-watch them level up and evolve, and fill your Aether-Dex.
+An original **2D top-down monster-collector RPG** for the browser — explore a tile
+world, find and battle wild Aetherbeasts, capture them, build a team, level up and
+evolve, and fill your Aether-Dex. On top of the single-player core it adds
+**real-time PvP**, a **Phantom wallet** login, and an optional **on-chain $AETHER**
+gacha — built so the game is fun *without* spending a cent.
 
-> Built per the project brief. The crypto layer (Phantom wallet login + a single
-> on-chain asset, **$AETHER** — *no NFTs*) is a later phase and is intentionally
-> **not** present in this build. The core loop stands on its own.
+> **No NFTs.** The only digital asset is the **$AETHER** token, and it is a utility
+> currency for premium summons — never sold or marketed as an investment. See
+> [the currency model](#currencies--the-money-boundary) below.
 
 ```
 aetherbeasts/
-├─ shared/   @aether/shared — engine-agnostic game CORE (pure TS, unit-tested):
-│            data (16 species, 23 moves, 8 types, items, encounters) +
-│            all rules (damage, capture, exp curve, stats, battle, evolution).
-├─ client/   React + Vite + TypeScript shell hosting a Phaser 3 game:
-│            • Phaser scenes — Overworld (tilemap, movement, NPCs, encounters)
-│              and Battle (full juice).
-│            • React overlays — Title, Starter select, HUD, Dialogue, and the
-│              Party / Box / Dex / Summary / Bag / Shop panels.
+├─ shared/   @aether/shared — pure-TS game CORE + wire protocol (unit-tested):
+│            data (species, moves, types, items, encounters) + all rules
+│            (damage, capture, exp, stats, battle, evolution, gacha).
+├─ server/   @aether/server — authoritative Socket.IO server: matchmaking,
+│            server-resolved PvP, Battle-Credit wagers, wallet sign-in,
+│            and on-chain $AETHER payment verification.
+├─ client/   React + Vite + Phaser 3 — the game (Overworld + Battle scenes)
+│            plus React overlays (HUD, panels, PvP arena, wallet/net layer).
 └─ tools/    extract-assets.mjs — pulls sprites + audio from the source engine.
 ```
 
 ## Quick start
 
 ```bash
-# from aetherbeasts/
 npm install
 npm run assets     # one-time: extract creature sprites + audio (needs tools/_engine)
-npm run dev        # Vite dev server (http://localhost:5181)
+npm run dev        # starts BOTH the server (:3001) and the client (:5181)
+# open http://localhost:5181 — connect Phantom to play
 ```
 
-Other scripts:
+| Script | What it does |
+|---|---|
+| `npm run dev` | server + client together (hot-reload) |
+| `npm run dev:client-only` | just the client |
+| `npm test` | engine unit tests (Vitest) |
+| `npm run test:server` / `test:auth` | two-client PvP + wallet-auth end-to-end |
+| `npm run test:payments` / `test:store` | on-chain money-math + save/replay guards |
+| `npm run typecheck` / `npm run build` | full typecheck / production build |
 
-```bash
-npm test           # Vitest — 25 unit tests on the game core
-npm run typecheck  # tsc on shared + client
-npm run build      # production build of shared + client
-```
+## Features
 
-## How to play
+- **Single-player core** — overworld exploration, a juicy turn-based battle system,
+  the classic 3-wobble capture, Party / Box / Aether-Dex, level-ups, evolution, and
+  enterable building interiors. Fun and complete on its own.
+- **Real-time PvP** — quick-match into a server-authoritative battle and stake
+  **Battle Credits** (a closed-loop, non-cashable soft currency). The server owns
+  the battle state + RNG, so wagers can't be forged; each client sees a
+  perspective-correct view.
+- **Phantom wallet login** — a free, off-chain `signMessage` over a single-use
+  nonce (ed25519). Your wallet is your account; login is mandatory (it's the
+  Sybil gate for any future rewards).
+- **On-chain $AETHER gacha** *(dormant until a token is configured)* — premium
+  summons priced in **USD** and paid in $AETHER at the live token price, verified
+  on-chain and resolved server-side. Spending is **one-way** (you buy pulls; you
+  never cash out), keeping it a published-odds loot box, not gambling.
 
-- **Title → New Journey** → name your tamer → **choose a starter** from Professor
-  Wren: **Drachnid** (Fire), **Draquatic** (Water), or **Plaugspout** (Plant).
-- A **first-run tutorial** (Professor Wren) explains the controls and your goal,
-  and the HUD shows a live **objective** that updates as you progress.
-- **Move** with WASD / arrow keys. **Interact** (talk, read signs, use the Aether
-  Shrine to heal + save) with **Space / Z / E** — a floating **▲ Space** prompt
-  appears whenever you're facing something interactable. **Menu** = M, **Bag** = B.
-- Head **south** out of town: the path runs straight through a band of **tall
-  grass** on Whisperwood Route, so your first wild encounter is guaranteed. The
-  grass **rustles** as you walk it; flanking patches hide more (and tougher) beasts.
-- In **battle**: `FIGHT` (pick a move), `BAG` (hurl a Pact Stone to capture, or
-  use a Potion), `TEAM` (switch), `RUN`. Weaken a wild creature — lower HP +
-  status ailments raise the catch rate — then throw a Pact Stone for the classic
-  **3-wobble** capture. Caught beasts join your team (or storage if it's full).
-- Win battles to earn **EXP**, **level up**, learn moves, and **evolve**.
-- Spend **Coins** at the **Provisioner** (the in-game soft currency — *not* crypto).
+## Currencies & the money boundary
 
-## What's implemented (Phase 0 acceptance ✅)
+| Currency | Where | Used for | Cashable? |
+|---|---|---|---|
+| `$AETHER` in-game (◈) | client save | free gacha / shop / PvE rewards | no |
+| **Battle Credits** | server-authoritative | **PvP wagers only** | no |
+| on-chain `$AETHER` | your wallet | premium summons (one-way) | no — never paid out |
 
-Start a game → pick a starter → explore → win a turn-based battle with full juice
-→ capture with the 3-wobble → Party / Box / Dex working → level-up + evolution →
-heal at the shrine → save & reload. **Fun without spending.**
+Battle Credits are never on-chain and never redeemable; there is **no token pot or
+escrow on a match outcome**. The on-chain token is only ever *spent into* the game.
+These lines are deliberate — they keep the game clear of unlicensed gambling and
+keep $AETHER a utility currency rather than an investment.
 
-### Battle engine (server-ready, pure & tested)
-All rules live in `@aether/shared` as deterministic, injectable-RNG functions, so
-a later phase can run the authoritative bits (RNG, economy) server-side with no
-rewrite. Math is **ported verbatim** from the reference engine and unit-tested:
+## Architecture highlights
 
-- Damage `(((lv*2)/5 + 2)·power·(atk·atkBuff)/(def·defBuff))·0.02·type·STAB`,
-  plus Phase-0 additions: **critical hits** (×1.5) and a **0.85–1.0 roll**.
-- Physical/Magic split, an 8-type chart (1.5× / 0.5× / 0×), STAB, accuracy with
-  evasion/blind, status ailments (poison/burn/bleed/paralyze/stun…), stat buffs.
-- Capture chance `lerp(1,0.25,hp%)·(70 + ailment? + lowLevel)·power·0.01`.
-- EXP curve `ceil(25 + 22.8·L²·lin + 0.125·L³·quad)` across 4 growth groups;
-  level-up move learning and level-based evolution.
+- The battle engine (`shared/src/engine/battle.ts`) is **pure, deterministic, and
+  seeded** — PvP runs through `resolveTurnPvP(state, you, them, rng)` on the server.
+- The wire protocol in `shared/src/net/protocol.ts` is the single source of truth
+  shared by client and server, so the two can't drift.
+- On-chain payments are verified in **exact integer base units**, bound to the
+  paying wallet, single-use (durable when a DB is configured), and recoverable if a
+  result packet is lost — see the [security notes](MULTIPLAYER.md).
 
-### Content (the slice)
-- **One town + one route** (Whisperwood) rendered with procedural tiles, plus a
-  shrine (heal/save), shop, and three NPCs.
-- **16 original creatures** across 8 two-stage evolution lines; a Fire/Water/Plant
-  starter trio; weighted encounter tables.
-- Party (6) + a paged storage **Box**; a searchable **Aether-Dex** with
-  Seen/Caught/silhouettes and detail pages; **Bag** + **Shop** on a Coins economy.
-
-### Juice
-Battle-start flash + slide-in, attacker lunge, target shake/flicker, smooth
-HP-bar drain (green→yellow→red), floating damage numbers, screen shake scaled to
-damage, crit flash + "Critical hit!", super/not-very-effective text, the
-3-wobble capture with suspense, faint fade, level-up sparkle, evolution sequence,
-typewriter dialogue, and SFX/music for every beat (overworld, battle, capture,
-level-up, evolution, shop, heal).
+More: [MULTIPLAYER.md](MULTIPLAYER.md) · [DEPLOY.md](DEPLOY.md) ·
+design specs in [`docs/superpowers/specs/`](docs/superpowers/specs).
 
 ## Assets & originality
 
-Creature sprites, battle FX, UI sprites, music, SFX, **the outdoor tileset
-(grass/path/water), and the 4×4 character walk sheets** (player + NPCs) are
-extracted from the project-provided **Yal Monster Collector Engine** (commercial
-use OK, no resale — see `client/public/assets/ASSETS_CREDITS.md`). Trees,
-buildings, the shrine, and the tall-grass / flower overlays are drawn
-procedurally on top of the real ground. All creature names, the world/region,
-types, and all game/UI code are **original**; only generic mechanics (turn math,
-capture, type tiers) are shared genre conventions.
+Creature sprites, battle FX, UI sprites, music, SFX, the outdoor tileset, and the
+character walk sheets are extracted from the project-provided **Yal Monster
+Collector Engine** (commercial use OK, no resale — see
+[`client/public/assets/ASSETS_CREDITS.md`](client/public/assets/ASSETS_CREDITS.md)).
+Trees, buildings, and overlays are drawn procedurally. All creature names, the
+world/region, types, the multiplayer + economy systems, and all game code are
+**original**; only generic genre mechanics (turn math, capture, type tiers) are
+shared conventions.
 
 ## Notes
 
-- **Single-player, offline.** Save data lives in `localStorage` behind a
-  `SaveAdapter` interface — a later phase swaps in a server adapter keyed to a
-  wallet public key without touching game code.
 - React **StrictMode is intentionally off** — its dev double-mount destroys the
   Phaser game mid-boot.
+- Save data lives behind a `SaveAdapter` seam (local ↔ server) keyed to the wallet,
+  so progression follows the account without touching game code.
