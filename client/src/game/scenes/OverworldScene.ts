@@ -31,7 +31,7 @@ const ENCOUNTER_CHANCE = 0.05;
 const INTRO_LINES = [
   "Welcome to Aether Town! I'm Professor Wren.",
   'Move with WASD or the arrow keys. Press Space to talk to people, read signs, and confirm choices.',
-  'Head SOUTH past the gate into Whisperwood Route — its tall grass is crawling with wild Aetherbeasts.',
+  'Head SOUTH past the gate into Whisperwood Route, then WALK AROUND in the tall grass — roaming through it is how you stumble on wild Aetherbeasts to battle and catch.',
   'To catch one: weaken it in battle, then choose BAG and throw a Pact Stone. The lower its HP, the better your odds!',
   'Rest in your bed at Home, or kneel at the Chapel altar, any time to heal your team and save your journey. Now go — adventure awaits!',
 ];

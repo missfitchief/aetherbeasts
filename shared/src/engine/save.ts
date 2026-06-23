@@ -48,7 +48,7 @@ export function newSave(playerId: string, playerName: string): SaveData {
 
 /** Pick a starter and seed the party + dex. */
 export function chooseStarter(save: SaveData, speciesId: string, rng?: RNG): Creature {
-  const starter = createCreature(speciesId, 5, { rng });
+  const starter = createCreature(speciesId, 1, { rng }); // start from scratch — grow it up
   save.party = [starter];
   recordSeen(save, speciesId);
   recordCaught(save, speciesId);

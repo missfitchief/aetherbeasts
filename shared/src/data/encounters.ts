@@ -11,7 +11,7 @@ export const ENCOUNTER_ZONES: Record<string, EncounterZone> = {
   whisperwood: {
     id: 'whisperwood',
     name: 'Whisperwood Route',
-    levelRange: [2, 5],
+    levelRange: [1, 3],
     table: [
       { species: 'grodent', weight: 30 },
       { species: 'duvan', weight: 25 },
@@ -24,7 +24,7 @@ export const ENCOUNTER_ZONES: Record<string, EncounterZone> = {
   whisperwood_deep: {
     id: 'whisperwood_deep',
     name: 'Whisperwood (deep grass)',
-    levelRange: [4, 7],
+    levelRange: [2, 5],
     table: [
       { species: 'moldole', weight: 26 },
       { species: 'jestar', weight: 22 },
