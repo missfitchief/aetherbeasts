@@ -140,7 +140,28 @@ export function buildWorld(): WorldMap {
           if (xx >= 0 && xx < W && yy >= 0 && yy < H) solid[yy][xx] = true;
     }
   };
-  const treeAt = (x: number, y: number) => obj(rnd() < 0.34 ? 'pine' : (['tree', 'tree2', 'tree3'] as ObjKind[])[Math.floor(rnd() * 3)], x, y);
+  // Tree CANOPIES are ~3 tiles wide, so trees within 2 tiles of each other pile up
+  // into an overlapping blob. We track every tree tile and (a) never stack two on
+  // one tile, and (b) keep DECORATIVE trees ~3 tiles apart so each reads distinctly.
+  const treeSet = new Set<string>();
+  const tkey = (x: number, y: number) => x + ',' + y;
+  const nearTree = (x: number, y: number, r: number) => {
+    for (let dy = -r; dy <= r; dy++)
+      for (let dx = -r; dx <= r; dx++)
+        if (treeSet.has(tkey(x + dx, y + dy))) return true;
+    return false;
+  };
+  const treeAt = (x: number, y: number) => {
+    if (treeSet.has(tkey(x, y))) return; // never two trees on the same tile
+    treeSet.add(tkey(x, y));
+    obj(rnd() < 0.34 ? 'pine' : (['tree', 'tree2', 'tree3'] as ObjKind[])[Math.floor(rnd() * 3)], x, y);
+  };
+  /** A decorative tree, placed only if no other tree's canopy would touch it. */
+  const decoTreeAt = (x: number, y: number): boolean => {
+    if (nearTree(x, y, 2)) return false;
+    treeAt(x, y);
+    return true;
+  };
   const pineAt = (x: number, y: number) => obj('pine', x, y);
   const treeBorder = () => {
     // a dense, slightly ragged forest wall around the map edge (2 deep)
@@ -155,21 +176,18 @@ export function buildWorld(): WorldMap {
   const treeEdge = (x0: number, x1: number, yBase: number) => {
     const water = (xx: number, yy: number) => tiles[yy]?.[xx]?.type === 'water';
     for (let x = x0; x <= x1; x++) {
-      const row = yBase - (rnd() < 0.45 ? 1 : 0);
-      if (!water(x, row) && rnd() < 0.88) treeAt(x, row);
-      if (!water(x, row - 1) && rnd() < 0.32) treeAt(x, row - 1); // a second, deeper tree for depth
-      if (!water(x, yBase) && rnd() < 0.16) obj('bush', x, yBase); // low undergrowth softening the base
+      const row = yBase - (rnd() < 0.45 ? 1 : 0); // stagger height so the treeline isn't flat
+      if (!water(x, row)) decoTreeAt(x, row);      // spaced — distinct trees, not an overlapping wall
+      if (!water(x, yBase) && rnd() < 0.22) obj('bush', x, yBase); // low undergrowth fills the gaps
     }
   };
   const treeCluster = (cx: number, cy: number, n: number, spread: number) => {
-    // scatter with a minimum trunk spacing so canopies don't merge into a blob
-    const placed: [number, number][] = [];
-    for (let tries = 0; placed.length < n && tries < n * 12; tries++) {
+    // scatter with GLOBAL spacing so canopies never merge — within the clump or
+    // with a neighbouring cluster/edge.
+    for (let tries = 0, placed = 0; placed < n && tries < n * 18; tries++) {
       const px = Math.round(cx + (rnd() - 0.5) * spread * 2);
       const py = Math.round(cy + (rnd() - 0.5) * spread * 2);
-      if (placed.some((p) => Math.abs(p[0] - px) <= 1 && Math.abs(p[1] - py) <= 1)) continue;
-      placed.push([px, py]);
-      treeAt(px, py);
+      if (decoTreeAt(px, py)) placed++;
     }
   };
   const pond = (cx: number, cy: number, rx: number, ry: number) => {
