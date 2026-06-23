@@ -19,6 +19,7 @@ export function MenuPanel() {
     { emoji: '🎒', label: 'Bag', onClick: () => openPanel('bag') },
     { emoji: '📖', label: 'Aether-Dex', sub: `${dc.caught}/${dc.total}`, onClick: () => openPanel('dex') },
     { emoji: '🌀', label: 'Spirit Realm', sub: 'Storage', onClick: () => openPanel('box') },
+    { emoji: '❔', label: 'How to Play', sub: 'Guide', onClick: () => openPanel('help') },
     {
       emoji: '💾',
       label: 'Save Game',

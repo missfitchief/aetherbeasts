@@ -422,6 +422,12 @@ html, body, #root {
 .btn.small { padding: 5px 12px; font-size: 13px; }
 .quest-foot { padding-top: 6px; border-top: 1px dashed rgba(255, 207, 92, 0.3); }
 
+/* --- help / how-to-play --- */
+.help { display: flex; flex-direction: column; gap: 12px; }
+.help-row { display: flex; gap: 11px; align-items: flex-start; }
+.help-icon { font-size: 20px; line-height: 1.2; flex-shrink: 0; width: 26px; text-align: center; }
+.help-title { font-weight: 700; margin-bottom: 2px; }
+
 /* reveal overlay */
 .reveal-overlay {
   position: fixed; inset: 0; z-index: 60;

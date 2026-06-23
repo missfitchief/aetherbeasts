@@ -165,6 +165,8 @@ export interface SaveData {
   playtimeSteps: number;
   /** First-run tutorial shown? */
   seenIntro: boolean;
+  /** Ids of one-time tutorial tips already shown (buildings, features). */
+  seenTips: string[];
   createdAt: number;
   updatedAt: number;
 }

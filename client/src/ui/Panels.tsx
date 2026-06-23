@@ -9,6 +9,7 @@ import { BagPanel } from './panels/BagPanel.js';
 import { ShopPanel } from './panels/ShopPanel.js';
 import { SummonPanel } from './panels/SummonPanel.js';
 import { QuestLogPanel } from './panels/QuestLogPanel.js';
+import { HelpPanel } from './panels/HelpPanel.js';
 
 export function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
   return (
@@ -48,6 +49,8 @@ export function Panels() {
       return <SummonPanel />;
     case 'quests':
       return <QuestLogPanel />;
+    case 'help':
+      return <HelpPanel />;
     default:
       return null;
   }

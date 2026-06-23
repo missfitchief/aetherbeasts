@@ -6,7 +6,7 @@ import { createCreature } from './factory.js';
 import { statOf } from './formulas.js';
 import type { RNG } from './rng.js';
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 const BOX_TOTAL = BOX_PAGE_SIZE * BOX_PAGES;
 
 /** Onboarding balance: enough $AETHER for a featured 10-pull + some shop runs. */
@@ -40,6 +40,7 @@ export function newSave(playerId: string, playerName: string): SaveData {
     wild: { lastTick: 0 }, // 0 => the forest starts FULL of beasts to catch
     playtimeSteps: 0,
     seenIntro: false,
+    seenTips: [],
     createdAt: 0,
     updatedAt: 0,
   };
@@ -150,6 +151,7 @@ export function normalizeSave(save: SaveData): SaveData {
   const legacyIncubator = (save as unknown as { incubator?: unknown }).incubator;
   if (!save.wild || typeof save.wild.lastTick !== 'number') save.wild = { lastTick: 0 };
   if (legacyIncubator) delete (save as unknown as { incubator?: unknown }).incubator;
+  if (!Array.isArray(save.seenTips)) save.seenTips = []; // tutorial tips (v6)
   save.version = SAVE_VERSION;
   return save;
 }

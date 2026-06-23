@@ -9,7 +9,7 @@ import { saveAdapter, getOrCreatePlayerId } from './persistence.js';
 export interface SlotLoc { zone: 'party' | 'box'; index: number }
 
 export type Screen = 'title' | 'starter' | 'playing';
-export type Panel = null | 'menu' | 'party' | 'box' | 'dex' | 'bag' | 'shop' | 'summary' | 'summon' | 'quests';
+export type Panel = null | 'menu' | 'party' | 'box' | 'dex' | 'bag' | 'shop' | 'summary' | 'summon' | 'quests' | 'help';
 
 export interface DialogueState {
   lines: string[];
@@ -54,6 +54,8 @@ interface GameStore {
   buyItem: (itemId: string, price: number) => boolean;
   summon: (bannerId: string, count: number) => SummonReport | null;
   addAether: (n: number) => void;
+  /** Returns true the FIRST time a tip id is seen (and records it), else false. */
+  claimTip: (id: string) => boolean;
   awaken: (targetUid: string, fodderUid: string) => boolean;
 
   // --- ui actions ---
@@ -226,6 +228,14 @@ export const useGame = create<GameStore>((set, get) => ({
 
   addAether(n) {
     get().mutate((s) => { s.aether = (s.aether ?? 0) + n; });
+  },
+  claimTip(id) {
+    const { save } = get();
+    if (!save) return false;
+    if (!Array.isArray(save.seenTips)) save.seenTips = [];
+    if (save.seenTips.includes(id)) return false;
+    get().mutate((s) => { (s.seenTips ??= []).push(id); });
+    return true;
   },
   awaken(targetUid, fodderUid) {
     const { save } = get();

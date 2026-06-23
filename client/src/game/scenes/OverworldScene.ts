@@ -36,6 +36,31 @@ const INTRO_LINES = [
   'Rest in your bed at Home, or kneel at the Chapel altar, any time to heal your team and save your journey. Now go — adventure awaits!',
 ];
 
+// One-time tutorial shown the first time a player enters each building.
+const BUILDING_TIPS: Record<string, { speaker: string; lines: string[] }> = {
+  home: { speaker: 'Tip · Home 🏠', lines: [
+    'This is your Home.',
+    'Sleep in the bed any time to fully heal your team AND save your progress — the safest spot to recover before a tough fight.',
+  ] },
+  church: { speaker: 'Tip · Chapel ⛪', lines: [
+    'Welcome to the Chapel.',
+    'Kneel at the altar to heal your whole team and save your journey — a handy checkpoint when you’re far from Home.',
+  ] },
+  shop: { speaker: 'Tip · Provisioner 🛒', lines: [
+    'This is the Provisioner — the shop.',
+    'Spend ◈ $AETHER here on Pact Stones (your tool for catching wild beasts) and Potions (to heal mid-battle). Stock up before you explore!',
+  ] },
+  lab: { speaker: 'Tip · Wren’s Lab 🔬', lines: [
+    'Welcome to Wren’s Lab.',
+    'Two machines here: the ✦ Aether Rift (left) summons brand-new beasts for ◈, and the Evolution Chamber (right) awakens beasts ready to evolve.',
+    'Talk to Professor Wren whenever you need a hand.',
+  ] },
+  cottage: { speaker: 'Tip · Cottage 🏡', lines: [
+    'A cozy cottage.',
+    'Townsfolk live here — chat with them for tips and lore about the world of Aetherbeasts.',
+  ] },
+};
+
 export class OverworldScene extends Phaser.Scene {
   private world!: WorldMap;
   private player!: Phaser.GameObjects.Sprite;
@@ -232,7 +257,17 @@ export class OverworldScene extends Phaser.Scene {
       this.cameras.main.fadeIn(170);
       this.busy = false;
       this.canInteract = false; // require a key release before interacting after a warp
+      this.maybeBuildingTip();
     });
+  }
+
+  /** First time the player enters a building, explain what it’s for. */
+  private maybeBuildingTip(): void {
+    if (this.world.kind !== 'interior') return;
+    const tip = BUILDING_TIPS[this.world.id];
+    if (!tip) return;
+    if (!useGame.getState().claimTip('enter:' + this.world.id)) return;
+    useGame.getState().showDialogue(tip.lines, { speaker: tip.speaker });
   }
 
   private placePlayer(): void {
