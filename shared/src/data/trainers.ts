@@ -57,7 +57,7 @@ export const TRAINERS: Trainer[] = [
   {
     id: 'boss_verdant', name: 'Warden Sylva', kind: 'boss', zone: 'whisperwood',
     team: [{ species: 'moldole', level: 11 }, { species: 'spookshroom', level: 12 }, { species: 'flowrath', level: 14 }],
-    moneyReward: 450, badge: 'verdant',
+    moneyReward: 300, badge: 'verdant',
     intro: ["So you're the one rattling my woods.", 'Beat me and the Verdant Badge - and the cave beyond - are yours.'],
     defeat: ['...Magnificent. The Verdant Badge is yours.', 'The heat-haze at the south path will part for you now. Emberhollow awaits.'],
   },
@@ -92,7 +92,7 @@ export const TRAINERS: Trainer[] = [
       { species: 'ratssive', level: 21 }, { species: 'shroomole', level: 22 },
       { species: 'wraithmanita', level: 23 }, { species: 'charachne', level: 24 },
     ],
-    moneyReward: 850, badge: 'ember',
+    moneyReward: 550, badge: 'ember',
     intro: ['Few reach my magma throne. Fewer leave with the Ember Badge.', 'Show me a tamer worthy of the Arena!'],
     defeat: ['The Ember Badge is yours, champion of Emberhollow.', "You've outgrown these caves - the Aether Arena is where legends are forged now. Go."],
   },

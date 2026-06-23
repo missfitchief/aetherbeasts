@@ -583,11 +583,11 @@ export class OverworldScene extends Phaser.Scene {
     const game = useGame.getState();
     if (result.outcome === 'caught') {
       game.addCreature(wild);
-      const reward = 20 + wild.level * 5;
+      const reward = 10 + wild.level * 3;
       game.addAether(reward);
       game.showToast(`${getSpecies(wild.speciesId).name} joined you!  +${reward} ◈ $AETHER`);
     } else if (result.outcome === 'win') {
-      const reward = 12 + wild.level * 6; // prize money for the win
+      const reward = 6 + wild.level * 3; // prize money for the win (tightened so ◈ stays meaningful)
       game.addAether(reward);
       game.showToast(`Victory!  +${reward} ◈ $AETHER`);
     } else if (result.outcome === 'lose') {
