@@ -39,9 +39,9 @@ describe('scaledWildLevel', () => {
 describe('monster evolutions (from the pack)', () => {
   const LINES: [string, string, number][] = [
     ['grodent', 'ratssive', 16],
-    ['drachnid', 'charachne', 20],
-    ['draquatic', 'leviocean', 20],
-    ['plaugspout', 'flowrath', 20],
+    ['drachnid', 'charachne', 16], // pulled 20 -> 16 for the content arc
+    ['draquatic', 'leviocean', 16],
+    ['plaugspout', 'flowrath', 16],
     ['duvan', 'pidgreat', 21],
     ['jestar', 'cardemon', 22],
     ['spookshroom', 'wraithmanita', 22],

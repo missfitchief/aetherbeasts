@@ -199,11 +199,14 @@ export function catchWobbles(chance: number, caught: boolean, rng: RNG): number 
   return wobbles;
 }
 
-/** XP awarded for defeating a creature (engine-style: base from species total + level). */
+/** XP awarded for defeating a creature (base from species total + level). Retuned
+ *  for the content arc (divisor 12 -> 4) so beasts evolve during normal play —
+ *  a starter reaches its first evolution across the Whisperwood arc (see
+ *  arc-progression.test.ts), instead of being thousands of fights away. */
 export function expYield(defeated: Creature): number {
   const species = getSpecies(defeated.speciesId);
   const baseTotal = Object.values(species.base).reduce((a, b) => a + b, 0);
-  return Math.floor((baseTotal * defeated.level) / 12);
+  return Math.floor((baseTotal * defeated.level) / 4);
 }
 
 /** Convenience: the resolved damage for an attacker using a move on a defender. */
