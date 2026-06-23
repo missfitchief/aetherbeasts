@@ -40,6 +40,32 @@ export interface PublicProfile {
   lumen: number;
 }
 
+/** A LUMEN -> $AETHER cash-out quote from the Aether Exchange (server-computed). */
+export interface ExchangeQuote {
+  ok: boolean;
+  reason?: string;
+  requested: number;       // LUMEN the player asked to convert
+  acceptedLumen: number;   // after daily/weekly caps + redeemable balance
+  burnedLumen: number;     // conversion burn-tax
+  netLumen: number;        // accepted - burned
+  taxRate: number;         // tau
+  aether: number;          // $AETHER (UI units) they'd receive
+  aetherBaseUnits: string; // exact base units (bigint serialized as string)
+  redeemable: number;      // held LUMEN that has cleared the min-hold
+  dailyRemaining: number;
+  weeklyRemaining: number;
+  eligible: boolean;       // passed the eligibility gate (prior purchase + wallet age)
+}
+
+/** Result of a LUMEN -> $AETHER redemption. */
+export interface ExchangeResult {
+  ok: boolean;
+  reason?: string;
+  sig?: string;            // payout signature (or a SIM- placeholder in sim mode)
+  lumenSpent: number;
+  aether: number;
+}
+
 export interface AuthOk {
   token: string;          // resume token (persist client-side)
   profile: PublicProfile;

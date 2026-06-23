@@ -2,13 +2,14 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { Server, type Socket } from 'socket.io';
 import type { SaveData, PlayerAction, SummonReport, QuestProgressType } from '@aether/shared';
-import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, claimLoginReward, addItem, toQuestView, poolCreditFromRevenue, LUMEN_FAUCET, utcDate } from '@aether/shared';
-import { PORT, corsOrigin, TREASURY_ADDRESS, AETHER_MINT, AETHER_DECIMALS, QUOTE_TTL_MS, ONCHAIN_SUMMON_ENABLED, LUMEN_ENABLED, validateConfig } from './config.js';
+import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, claimLoginReward, addItem, toQuestView, poolCreditFromRevenue, LUMEN_FAUCET, utcDate, redeemQuote, isRedeemEligible, REDEEM_DAILY_CAP, REDEEM_WEEKLY_CAP } from '@aether/shared';
+import { PORT, corsOrigin, TREASURY_ADDRESS, AETHER_MINT, AETHER_DECIMALS, QUOTE_TTL_MS, ONCHAIN_SUMMON_ENABLED, LUMEN_ENABLED, EXCHANGE_ENABLED, validateConfig } from './config.js';
 import { Store, publicProfile, type PlayerRecord } from './store.js';
 import { buildLoginMessage, verifySignature } from './auth.js';
 import { aetherBalance } from './balance.js';
 import { verifyAetherPayment } from './payments.js';
-import { summonAetherQuote } from './pricefeed.js';
+import { summonAetherQuote, aetherUsdPrice } from './pricefeed.js';
+import { payoutAether } from './payout.js';
 import { MatchManager } from './match.js';
 
 const store = new Store();
@@ -285,6 +286,81 @@ function bind(socket: Socket) {
       socket.emit('profile:update', publicProfile(rec));
     }
     socket.emit('login:claimed', { day: res.day, reward: res.reward, view: toQuestView(qs, now) });
+  });
+
+  // --- The Aether Exchange: LUMEN -> $AETHER cash-out (gated, server-authoritative) ---
+  const DECIMALS_POW = Math.pow(10, AETHER_DECIMALS);
+  const disabledQuote = (reason: string) => ({
+    ok: false, reason, requested: 0, acceptedLumen: 0, burnedLumen: 0, netLumen: 0,
+    taxRate: 0, aether: 0, aetherBaseUnits: '0', redeemable: 0, dailyRemaining: 0, weeklyRemaining: 0, eligible: false,
+  });
+
+  socket.on('exchange:quote', async (p: { lumen: number }) => {
+    const id = pid();
+    if (!id || !p) return;
+    if (!EXCHANGE_ENABLED) return socket.emit('exchange:quoted', disabledQuote('The Aether Exchange is not open yet.'));
+    const rec = store.getById(id);
+    if (!rec) return;
+    const now = Date.now();
+    const requested = Math.max(0, Math.floor(Number(p.lumen) || 0));
+    const redeemable = store.redeemableLumen(id, now);
+    const { dailyUsed, weeklyUsed } = store.redeemUsage(id, now);
+    const eligible = isRedeemEligible(store.getPremiumPurchases(id), store.accountAgeDays(id, now));
+    const price = await aetherUsdPrice();
+    const q = redeemQuote({
+      lumenRequested: Math.min(requested, redeemable),
+      aetherPriceUsd: price, aetherDecimals: AETHER_DECIMALS, rollingRatio: 0, // TODO: wire a rolling-window R for the tau governor
+      dailyUsedLumen: dailyUsed, weeklyUsedLumen: weeklyUsed, poolBaseUnits: store.getRewardsPool(),
+    });
+    socket.emit('exchange:quoted', {
+      ok: eligible && q.ok,
+      reason: !eligible ? 'Buy at least one premium pull (and let your wallet age 30 days) to use the Exchange.' : q.reason,
+      requested, acceptedLumen: q.acceptedLumen, burnedLumen: q.burnedLumen, netLumen: q.netLumen, taxRate: q.tau,
+      aether: Number(q.aetherBaseUnits) / DECIMALS_POW, aetherBaseUnits: q.aetherBaseUnits.toString(),
+      redeemable, dailyRemaining: Math.max(0, REDEEM_DAILY_CAP - dailyUsed), weeklyRemaining: Math.max(0, REDEEM_WEEKLY_CAP - weeklyUsed), eligible,
+    });
+  });
+
+  socket.on('exchange:redeem', async (p: { lumen: number }) => {
+    const id = pid();
+    if (!id || !p) return;
+    const fail = (reason: string) => socket.emit('exchange:result', { ok: false, reason, lumenSpent: 0, aether: 0 });
+    if (!EXCHANGE_ENABLED) return fail('The Aether Exchange is not open yet.');
+    const rec = store.getById(id);
+    if (!rec || !rec.wallet) return fail('Link a wallet to cash out.');
+    const now = Date.now();
+    if (!isRedeemEligible(store.getPremiumPurchases(id), store.accountAgeDays(id, now)))
+      return fail('Not eligible yet — buy a premium pull and let your wallet age 30 days first.');
+    const requested = Math.max(0, Math.floor(Number(p.lumen) || 0));
+    const redeemable = store.redeemableLumen(id, now);
+    const { dailyUsed, weeklyUsed } = store.redeemUsage(id, now);
+    const price = await aetherUsdPrice();
+    // Re-quote server-side; the client's numbers are NEVER trusted for a payout.
+    const q = redeemQuote({
+      lumenRequested: Math.min(requested, redeemable),
+      aetherPriceUsd: price, aetherDecimals: AETHER_DECIMALS, rollingRatio: 0,
+      dailyUsedLumen: dailyUsed, weeklyUsedLumen: weeklyUsed, poolBaseUnits: store.getRewardsPool(),
+    });
+    if (!q.ok) {
+      return fail(q.reason === 'pool_low' ? 'The Rewards Pool is replenishing — try again later.'
+        : q.reason === 'cap' ? 'Daily/weekly cash-out cap reached.' : 'Nothing redeemable yet.');
+    }
+    // Reserve atomically (consume LUMEN, debit the pool) BEFORE paying. The pool debit
+    // re-checks payout <= pool, so a concurrent redeem can't oversell it.
+    if (!store.commitRedeem(id, q.acceptedLumen, now)) return fail('Insufficient redeemable LUMEN.');
+    if (!store.debitRewardsPool(q.aetherBaseUnits)) {
+      store.grantLumen(id, q.acceptedLumen, 'redeem_refund'); // pool moved under us — give the LUMEN back
+      return fail('The Rewards Pool is replenishing — try again later.');
+    }
+    const pay = await payoutAether(rec.wallet, q.aetherBaseUnits);
+    if (!pay.ok) {
+      // Nothing left the treasury — refund BOTH reservations.
+      store.grantLumen(id, q.acceptedLumen, 'redeem_refund');
+      store.addRewardsPool(q.aetherBaseUnits);
+      return fail(pay.reason ?? 'Payout failed — your LUMEN was refunded.');
+    }
+    socket.emit('exchange:result', { ok: true, sig: pay.sig, lumenSpent: q.acceptedLumen, aether: Number(q.aetherBaseUnits) / DECIMALS_POW });
+    socket.emit('profile:update', publicProfile(rec));
   });
 
   socket.on('disconnect', () => {
