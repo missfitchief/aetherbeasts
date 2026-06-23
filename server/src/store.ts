@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import type { SaveData, PublicProfile, QuestState } from '@aether/shared';
-import { STARTING_CREDITS, freshQuestState, rollOver, MIN_HOLD_DAYS } from '@aether/shared';
+import { STARTING_CREDITS, freshQuestState, rollOver, MIN_HOLD_DAYS, LUMEN_FAUCET } from '@aether/shared';
 import { DATABASE_URL } from './config.js';
 
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // resume tokens expire after 30 days (sliding)
@@ -31,6 +31,8 @@ export interface PlayerRecord {
   lumenLots: LumenLot[];  // FIFO earn ledger backing the redeem min-hold
   lumenRedeem: { day: string; dayUsed: number; week: string; weekUsed: number };
   premiumPurchases: number; // verified premium-pull count (Exchange eligibility gate)
+  lumenGrantKeys: string[]; // idempotency keys for once-per-period LUMEN faucets
+  rankedLumen: { date: string; count: number }; // daily ranked-win LUMEN counter
   createdAt: number;
   updatedAt: number;
 }
@@ -175,6 +177,8 @@ export class Store {
       lumenLots: [],
       lumenRedeem: { day: '', dayUsed: 0, week: '', weekUsed: 0 },
       premiumPurchases: 0,
+      lumenGrantKeys: [],
+      rankedLumen: { date: '', count: 0 },
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -224,6 +228,8 @@ export class Store {
       lumenLots: [],
       lumenRedeem: { day: '', dayUsed: 0, week: '', weekUsed: 0 },
       premiumPurchases: 0,
+      lumenGrantKeys: [],
+      rankedLumen: { date: '', count: 0 },
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -326,6 +332,8 @@ export class Store {
     if (!Array.isArray(rec.lumenLots)) rec.lumenLots = [];
     if (!rec.lumenRedeem) rec.lumenRedeem = { day: '', dayUsed: 0, week: '', weekUsed: 0 };
     if (typeof rec.premiumPurchases !== 'number') rec.premiumPurchases = 0;
+    if (!Array.isArray(rec.lumenGrantKeys)) rec.lumenGrantKeys = [];
+    if (!rec.rankedLumen) rec.rankedLumen = { date: '', count: 0 };
   }
 
   getLumen(id: string): number {
@@ -396,6 +404,25 @@ export class Store {
   }
   accountAgeDays(id: string, now: number): number {
     const r = this.byId.get(id); return r ? (now - r.createdAt) / 86_400_000 : 0;
+  }
+  /** Grant LUMEN at most once per idempotency `key` (e.g. `daily:2026-06-23`). */
+  grantLumenOnce(id: string, key: string, amount: number, source: string): boolean {
+    const r = this.byId.get(id); if (!r || !(amount > 0)) return false; this.ensureLumen(r);
+    if (r.lumenGrantKeys.includes(key)) return false;
+    r.lumenGrantKeys.push(key);
+    if (r.lumenGrantKeys.length > 200) r.lumenGrantKeys = r.lumenGrantKeys.slice(-200);
+    this.grantLumen(id, amount, source); // persists the record (incl. the new key)
+    return true;
+  }
+  /** Grant a ranked-win LUMEN drip, capped per UTC day. Returns the amount granted. */
+  grantRankedWinLumen(id: string, now: number): number {
+    const r = this.byId.get(id); if (!r) return 0; this.ensureLumen(r);
+    const day = utcDay(now);
+    if (r.rankedLumen.date !== day) { r.rankedLumen.date = day; r.rankedLumen.count = 0; }
+    if (r.rankedLumen.count >= LUMEN_FAUCET.rankedWinDailyCap) return 0;
+    r.rankedLumen.count += 1;
+    this.grantLumen(id, LUMEN_FAUCET.rankedWin, 'ranked_win');
+    return LUMEN_FAUCET.rankedWin;
   }
 
   // --- LUMEN Rewards Pool (global singleton; the ONLY source of Exchange payouts) ---

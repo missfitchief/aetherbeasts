@@ -27,6 +27,7 @@ import {
   toQuestView,
 } from '@aether/shared';
 import { Store, publicProfile } from './store.js';
+import { LUMEN_ENABLED } from './config.js';
 
 interface MatchSide {
   id: string; // playerId
@@ -305,6 +306,7 @@ export class MatchManager {
   private bumpPvpWin(ms: MatchSide, outcome: Outcome) {
     if (outcome !== 'win') return;
     const now = Date.now();
+    if (LUMEN_ENABLED) this.store.grantRankedWinLumen(ms.id, now); // ranked LUMEN drip (daily-capped)
     const qs = this.store.getQuests(ms.id, now);
     if (qs && applyProgress(qs, 'pvp_win', 1)) {
       this.store.saveQuests(ms.id);

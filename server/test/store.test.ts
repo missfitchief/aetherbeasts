@@ -67,3 +67,16 @@ assert(store.debitRewardsPool(700n) === false, 'cannot debit more than the pool 
 assert(store.getRewardsPool() === 600n, 'failed debit leaves the pool intact');
 
 console.log('✅ LUMEN + Rewards Pool tests passed');
+
+// --- LUMEN faucets: once-per-key idempotency + ranked daily cap -----------
+const F = store.createWallet('WALLET_FAUCET');
+assert(store.grantLumenOnce(F.id, 'daily:2026-06-23', 3, 'dailies') === true, 'first once-key grant succeeds');
+assert(store.grantLumenOnce(F.id, 'daily:2026-06-23', 3, 'dailies') === false, 'the same once-key never re-grants');
+assert(store.getLumen(F.id) === 3, 'once-key granted exactly once');
+
+const fday = Date.now();
+let drips = 0;
+for (let i = 0; i < 15; i++) if (store.grantRankedWinLumen(F.id, fday) > 0) drips++;
+assert(drips === 10, 'ranked-win LUMEN is capped at 10/day');
+
+console.log('✅ LUMEN faucet tests passed');

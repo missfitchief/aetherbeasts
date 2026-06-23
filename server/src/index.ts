@@ -2,8 +2,8 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { Server, type Socket } from 'socket.io';
 import type { SaveData, PlayerAction, SummonReport, QuestProgressType } from '@aether/shared';
-import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, claimLoginReward, addItem, toQuestView, poolCreditFromRevenue } from '@aether/shared';
-import { PORT, corsOrigin, TREASURY_ADDRESS, AETHER_MINT, AETHER_DECIMALS, QUOTE_TTL_MS, ONCHAIN_SUMMON_ENABLED, validateConfig } from './config.js';
+import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, claimLoginReward, addItem, toQuestView, poolCreditFromRevenue, LUMEN_FAUCET, utcDate } from '@aether/shared';
+import { PORT, corsOrigin, TREASURY_ADDRESS, AETHER_MINT, AETHER_DECIMALS, QUOTE_TTL_MS, ONCHAIN_SUMMON_ENABLED, LUMEN_ENABLED, validateConfig } from './config.js';
 import { Store, publicProfile, type PlayerRecord } from './store.js';
 import { buildLoginMessage, verifySignature } from './auth.js';
 import { aetherBalance } from './balance.js';
@@ -249,6 +249,15 @@ function bind(socket: Socket) {
     rec.save.aether = (rec.save.aether ?? 0) + result.aether;
     rec.save.updatedAt = Math.max((rec.save.updatedAt ?? 0) + 1, now); // server-authored save wins
     store.saveProgress(id, rec.save); // persists the record (save + quests together)
+    // LUMEN faucet (gated): a full daily/weekly clear or a Season-Point milestone
+    // grants scarce LUMEN once per period (server-authoritative, idempotent).
+    if (LUMEN_ENABLED) {
+      if (qs.daily.quests.every((q) => q.claimed)) store.grantLumenOnce(id, `daily:${qs.daily.date}`, LUMEN_FAUCET.dailyQuestsCleared, 'dailies');
+      if (qs.weekly.quests.every((q) => q.claimed)) store.grantLumenOnce(id, `weekly:${qs.weekly.weekStart}`, LUMEN_FAUCET.weeklyQuestsCleared, 'weeklies');
+      const tier = Math.floor(qs.seasonPoints / LUMEN_FAUCET.seasonPointStep);
+      for (let t = 1; t <= tier; t++) store.grantLumenOnce(id, `season:${t}`, LUMEN_FAUCET.seasonPointMilestone, 'season');
+      socket.emit('profile:update', publicProfile(rec));
+    }
     socket.emit('quest:claimed', {
       questId: p.questId, aether: result.aether, points: result.points, streakBonus: result.streakBonus,
       save: rec.save, view: toQuestView(qs, now),
@@ -270,6 +279,11 @@ function bind(socket: Socket) {
     if (res.reward.itemId) addItem(rec.save, res.reward.itemId, res.reward.qty ?? 1);
     rec.save.updatedAt = Math.max((rec.save.updatedAt ?? 0) + 1, now);
     store.saveProgress(id, rec.save);
+    // Day-7 login slot also drips a little LUMEN (gated, once per cycle).
+    if (LUMEN_ENABLED && res.day === 7) {
+      store.grantLumenOnce(id, `login7:${utcDate(now)}`, LUMEN_FAUCET.loginDay7, 'login7');
+      socket.emit('profile:update', publicProfile(rec));
+    }
     socket.emit('login:claimed', { day: res.day, reward: res.reward, view: toQuestView(qs, now) });
   });
 
