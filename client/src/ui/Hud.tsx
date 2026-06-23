@@ -45,7 +45,7 @@ export function Hud() {
     <div className="hud">
       <div className="pill">{inside ? '🚪 Indoors' : `🧭 ${inForest ? 'Whisperwood Route' : 'Aether Town'}`}</div>
       {inside && <div className="pill esc-hint">⎋ Press ESC to leave</div>}
-      <div className="pill">◈ {save.aether.toLocaleString()} $AETHER</div>
+      <div className="pill">◈ {save.aether.toLocaleString()} GLINT</div>
       {profile && <div className="pill" title="Battle Credits — staked in PvP, never cashed out">⚔ {profile.credits.toLocaleString()} BC</div>}
       {balance && <div className="pill" title={`On-chain $AETHER balance (${balance.mode})`}>⛓ {balance.amount.toLocaleString()} {balance.mode === 'sim' ? '$AETHER·sim' : '$AETHER'}</div>}
       <div className={'pill wild-pill' + (wildReady ? ' ready' : '')} title="A wild beast is roaming the grass when ready; encounter it to reset the timer.">

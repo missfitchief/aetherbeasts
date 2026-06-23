@@ -50,7 +50,7 @@ const BUILDING_TIPS: Record<string, { speaker: string; lines: string[] }> = {
   ] },
   shop: { speaker: 'Tip · Provisioner 🛒', lines: [
     'This is the Provisioner — the shop.',
-    'Spend ◈ $AETHER here on Pact Stones (your tool for catching wild beasts) and Potions (to heal mid-battle). Stock up before you explore!',
+    'Spend ◈ GLINT here on Pact Stones (your tool for catching wild beasts) and Potions (to heal mid-battle). Stock up before you explore!',
   ] },
   lab: { speaker: 'Tip · Wren’s Lab 🔬', lines: [
     'Welcome to Wren’s Lab.',
@@ -587,11 +587,11 @@ export class OverworldScene extends Phaser.Scene {
       game.addCreature(wild);
       const reward = 10 + wild.level * 3;
       game.addAether(reward);
-      game.showToast(`${getSpecies(wild.speciesId).name} joined you!  +${reward} ◈ $AETHER`);
+      game.showToast(`${getSpecies(wild.speciesId).name} joined you!  +${reward} ◈ GLINT`);
     } else if (result.outcome === 'win') {
       const reward = 6 + wild.level * 3; // prize money for the win (tightened so ◈ stays meaningful)
       game.addAether(reward);
-      game.showToast(`Victory!  +${reward} ◈ $AETHER`);
+      game.showToast(`Victory!  +${reward} ◈ GLINT`);
     } else if (result.outcome === 'lose') {
       // Whiteout: heal + respawn at the last save point (and PERSIST it, so a
       // reload doesn't drop you back on the faint tile).
@@ -661,7 +661,7 @@ export class OverworldScene extends Phaser.Scene {
       const save = game.save!;
       markTrainerDefeated(save, trainer.id);
       game.addAether(trainer.moneyReward);
-      const lines = [...trainer.defeat, `You won!  +${trainer.moneyReward} ◈ $AETHER`];
+      const lines = [...trainer.defeat, `You won!  +${trainer.moneyReward} ◈ GLINT`];
       if (trainer.badge) {
         awardBadge(save, trainer.badge);
         if (trainer.badge === 'ember') {
@@ -727,7 +727,7 @@ export class OverworldScene extends Phaser.Scene {
       save.lastDailyBoss = new Date().toISOString().slice(0, 10);
       game.addAether(DAILY_BOSS_REWARD);
       game.persist();
-      game.showToast(`Daily Champion defeated!  +${DAILY_BOSS_REWARD} ◈ $AETHER`);
+      game.showToast(`Daily Champion defeated!  +${DAILY_BOSS_REWARD} ◈ GLINT`);
     } else if (result.outcome === 'lose') {
       game.heal();
       const save = game.save!;

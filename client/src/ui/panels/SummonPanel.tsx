@@ -52,7 +52,7 @@ export function SummonPanel() {
     const r = summon(bannerId, count);
     if (!r) {
       audio.sfx('sfx_buzzer', 0.3);
-      showToast('Not enough $AETHER.');
+      showToast('Not enough GLINT.');
       return;
     }
     emitQuestProgress('summon'); // toward the daily "Summon once" quest
@@ -63,8 +63,8 @@ export function SummonPanel() {
     <Modal title="✦ The Aether Rift" onClose={closePanel}>
       <div className="rift">
         <div className="rift-curr">
-          <span className="rift-bal">◈ {save.aether.toLocaleString()} $AETHER</span>
-          <span className="muted small">Earn $AETHER from battles, catches & duplicates.</span>
+          <span className="rift-bal">◈ {save.aether.toLocaleString()} GLINT</span>
+          <span className="muted small">Earn GLINT from battles, catches & duplicates.</span>
         </div>
 
         <div className="rift-tabs">
@@ -117,7 +117,7 @@ export function SummonPanel() {
 
         {onchainSummon && (
           <div className="rift-premium">
-            <div className="small muted">Out of ◈? Skip the grind — summon instantly with your <b>$AETHER</b> token:</div>
+            <div className="small muted">Out of GLINT? Skip the grind — summon instantly with your <b>$AETHER</b> token:</div>
             <div className="rift-actions">
               <button className="btn" disabled={busy} onClick={() => premiumSummon(bannerId, 1)}>Pay $AETHER ×1</button>
               <button className="btn gold" disabled={busy} onClick={() => premiumSummon(bannerId, 10)}>Pay $AETHER ×10</button>
@@ -188,7 +188,7 @@ function SummonReveal({ report, onClose }: { report: SummonReport; onClose: () =
         })}
       </div>
       <div className="reveal-foot">
-        {report.aetherGained > 0 && <span className="muted small">Duplicates refunded ◈ {report.aetherGained} $AETHER.</span>}
+        {report.aetherGained > 0 && <span className="muted small">Duplicates refunded ◈ {report.aetherGained} GLINT.</span>}
         {report.seed != null && <span className="muted small" title="Reproduce this exact pull in the Provably-Fair panel">🔒 Fair seed: {report.seed}</span>}
         <button className="btn" onClick={onClose}>Continue</button>
       </div>

@@ -16,12 +16,12 @@ export function ShopPanel() {
       showToast(`Bought ${name}.`);
     } else {
       audio.sfx('sfx_buzzer', 0.3);
-      showToast('Not enough $AETHER.');
+      showToast('Not enough GLINT.');
     }
   };
 
   return (
-    <Modal title={`Provisioner · ◈ ${save.aether.toLocaleString()} $AETHER`} onClose={closePanel}>
+    <Modal title={`Provisioner · ◈ ${save.aether.toLocaleString()} GLINT`} onClose={closePanel}>
       {SHOP_STOCK.map((id) => {
         const it = getItem(id);
         const owned = itemCount(save, id);

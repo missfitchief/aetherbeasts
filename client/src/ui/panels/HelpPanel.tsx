@@ -9,11 +9,11 @@ const SECTIONS: Section[] = [
   { icon: '🌿', title: 'Wild beasts',
     body: 'Walk through the tall grass on Whisperwood Route to meet wild Aetherbeasts. A fresh one roams every so often — watch the 🐾 timer at the top. Weaken a beast in battle, then open BAG and throw a Pact Stone; the lower its HP (and the more status it has), the better your catch odds.' },
   { icon: '⚔️', title: 'Battles',
-    body: 'Pick FIGHT to attack, BAG to catch or heal, TEAM to switch, RUN to flee. Types matter — hitting a weakness deals extra damage. Winning earns EXP, levels, new moves, and ◈ $AETHER.' },
+    body: 'Pick FIGHT to attack, BAG to catch or heal, TEAM to switch, RUN to flee. Types matter — hitting a weakness deals extra damage. Winning earns EXP, levels, new moves, and ◈ GLINT.' },
   { icon: '🏠', title: 'Home & ⛪ Chapel',
     body: 'Sleep in your bed at Home, or kneel at the Chapel altar, to fully heal your team AND save your progress. Use them as checkpoints before a tough fight or a long trip.' },
   { icon: '🛒', title: 'Provisioner (Shop)',
-    body: 'Spend ◈ $AETHER on Pact Stones (to catch beasts) and Potions (to heal in battle). Stock up before you head out.' },
+    body: 'Spend ◈ GLINT on Pact Stones (to catch beasts) and Potions (to heal in battle). Stock up before you head out.' },
   { icon: '🔬', title: "Wren's Lab",
     body: 'The ✦ Aether Rift summons brand-new beasts for ◈. The Evolution Chamber awakens beasts that are ready to evolve. Professor Wren is there if you need help.' },
   { icon: '✦', title: 'Summoning & evolution',
@@ -22,8 +22,8 @@ const SECTIONS: Section[] = [
     body: 'Daily and weekly quests reward ◈ and Season Points — keep a login streak for bonus ◈. Season Points are your standing for future $AETHER airdrops, so playing daily pays off.' },
   { icon: '⚔️', title: 'PvP Arena',
     body: 'Open the Arena to quick-match another trainer and wager Battle Credits (a closed-loop, in-game currency — never real tokens). Win to take the pot and climb the rating.' },
-  { icon: '◈', title: 'About $AETHER',
-    body: '◈ is the in-game currency you earn and spend on summons and the shop. Battle Credits (for PvP) are separate and non-cashable. The game is built to be fun without spending a cent.' },
+  { icon: '◈', title: 'About the currencies',
+    body: 'GLINT (◈) is the in-game currency you earn and spend on summons and the shop. $AETHER is the separate on-chain token. Battle Credits (for PvP) are separate and non-cashable. The game is built to be fun without spending a cent.' },
 ];
 
 export function HelpPanel() {

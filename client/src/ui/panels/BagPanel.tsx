@@ -52,7 +52,7 @@ export function BagPanel() {
   };
 
   return (
-    <Modal title={`Bag · ◈ ${save.aether.toLocaleString()} $AETHER`} onClose={closePanel}>
+    <Modal title={`Bag · ◈ ${save.aether.toLocaleString()} GLINT`} onClose={closePanel}>
       {using ? (
         <div>
           <div className="muted" style={{ marginBottom: 10 }}>
