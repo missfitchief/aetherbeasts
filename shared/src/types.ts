@@ -171,6 +171,8 @@ export interface SaveData {
   badges: string[];
   /** Ids of trainers/bosses already defeated (one-time battles, no rematch). */
   defeatedTrainers: string[];
+  /** UTC date the Daily Boss was last beaten (empty = never / available). */
+  lastDailyBoss: string;
   createdAt: number;
   updatedAt: number;
 }

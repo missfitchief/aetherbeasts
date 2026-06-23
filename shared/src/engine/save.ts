@@ -6,7 +6,7 @@ import { createCreature } from './factory.js';
 import { statOf } from './formulas.js';
 import type { RNG } from './rng.js';
 
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 const BOX_TOTAL = BOX_PAGE_SIZE * BOX_PAGES;
 
 /** Onboarding balance: enough $AETHER for a featured 10-pull + some shop runs. */
@@ -43,6 +43,7 @@ export function newSave(playerId: string, playerName: string): SaveData {
     seenTips: [],
     badges: [],
     defeatedTrainers: [],
+    lastDailyBoss: '',
     createdAt: 0,
     updatedAt: 0,
   };
@@ -177,6 +178,7 @@ export function normalizeSave(save: SaveData): SaveData {
   if (!Array.isArray(save.seenTips)) save.seenTips = []; // tutorial tips (v6)
   if (!Array.isArray(save.badges)) save.badges = []; // gym/boss badges (v7)
   if (!Array.isArray(save.defeatedTrainers)) save.defeatedTrainers = []; // one-time trainers (v7)
+  if (typeof save.lastDailyBoss !== 'string') save.lastDailyBoss = ''; // daily boss (v8)
   save.version = SAVE_VERSION;
   return save;
 }

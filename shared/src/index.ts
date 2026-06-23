@@ -10,7 +10,7 @@ export { TYPE_MATCHUP, typeEffectiveness } from './data/typechart.js';
 export { MOVES, getMove } from './data/moves.js';
 export { SPECIES, SPECIES_ORDER, STARTERS, getSpecies } from './data/species.js';
 export { ITEMS, SHOP_STOCK, getItem } from './data/items.js';
-export { ENCOUNTER_ZONES, scaledWildLevel } from './data/encounters.js';
+export { ENCOUNTER_ZONES, scaledWildLevel, dailyBossOf, DAILY_BOSS_REWARD } from './data/encounters.js';
 export { TRAINERS, getTrainer, trainersForZone, type Trainer, type TrainerMon } from './data/trainers.js';
 
 // Engine

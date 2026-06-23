@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { scaledWildLevel, ENCOUNTER_ZONES } from './encounters.js';
+import { scaledWildLevel, ENCOUNTER_ZONES, dailyBossOf } from './encounters.js';
 import { getSpecies } from './species.js';
 import { seededRng } from '../engine/rng.js';
 import { createCreature } from '../engine/factory.js';
@@ -56,6 +56,16 @@ describe('Emberhollow Cave zone', () => {
       expect(l).toBeGreaterThanOrEqual(z.levelRange[0]);
       expect(l).toBeLessThanOrEqual(22); // partyTop(20)+2 cap
     }
+  });
+});
+
+describe('Daily Boss', () => {
+  it('is deterministic per UTC date with a valid species and level band', () => {
+    const a = dailyBossOf('2026-06-23');
+    expect(dailyBossOf('2026-06-23')).toEqual(a); // same for everyone on a given day
+    expect(getSpecies(a.species)).toBeTruthy();
+    expect(a.level).toBeGreaterThanOrEqual(25);
+    expect(a.level).toBeLessThanOrEqual(39);
   });
 });
 

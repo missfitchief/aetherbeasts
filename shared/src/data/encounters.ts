@@ -64,3 +64,22 @@ export function scaledWildLevel(zone: EncounterZone, partyTopLevel: number, rng:
   const cap = Math.min(LEVEL_CAP, partyTopLevel + 2);
   return Math.max(lo, Math.min(cap, roll + drift));
 }
+
+// ---------------------------------------------------------------------------
+// Daily Boss — one tough, deterministic encounter per UTC day (same for everyone),
+// fought once a day for a chunky reward. Drawn from evolved/strong species.
+// ---------------------------------------------------------------------------
+const DAILY_BOSS_POOL = [
+  'charachne', 'leviocean', 'flowrath', 'pidgreat', 'cardemon', 'shroomole', 'wraithmanita', 'ratssive',
+];
+export const DAILY_BOSS_REWARD = 500; // ◈ awarded for beating today's boss
+
+/** Today's Daily Boss (species + level), deterministic from the UTC date string. */
+export function dailyBossOf(dateStr: string): { species: string; level: number } {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < dateStr.length; i++) { h ^= dateStr.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  return {
+    species: DAILY_BOSS_POOL[h % DAILY_BOSS_POOL.length],
+    level: 25 + (h % 15), // 25–39
+  };
+}

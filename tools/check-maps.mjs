@@ -26,6 +26,13 @@ function check(id) {
       errs.push(`npc ${n.id} unreachable (no walkable neighbour)`);
   }
 
+  for (const it of m.interactables) {
+    if (!inB(it.x, it.y)) { errs.push(`interactable ${it.kind} OOB`); continue; }
+    const nbrs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    if (!nbrs.some(([dx, dy]) => walkable(it.x + dx, it.y + dy)))
+      errs.push(`interactable ${it.kind}@(${it.x},${it.y}) unreachable (no walkable neighbour)`);
+  }
+
   for (const w of m.warps) {
     if (!inB(w.x, w.y)) errs.push(`warp@(${w.x},${w.y}) OOB`);
     const dst = getMap(w.toMap);

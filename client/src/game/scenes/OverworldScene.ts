@@ -3,6 +3,7 @@ import {
   ENCOUNTER_ZONES, scaledWildLevel, createCreature, weightedPick, defaultRng, getSpecies, SPECIES_ORDER,
   pendingEvolution, evolve, displayName, wildCount, consumeWild,
   hasBadge, isTrainerDefeated, markTrainerDefeated, awardBadge, getTrainer,
+  dailyBossOf, DAILY_BOSS_REWARD,
   type Creature, type Direction, type Trainer,
 } from '@aether/shared';
 import { getMap, TILE, ROUTE_START_Y, OBJ_DEF, type WorldMap, type Tile, type Npc, type Interactable } from '../world/maps.js';
@@ -470,6 +471,7 @@ export class OverworldScene extends Phaser.Scene {
         audio.sfx('sfx_ok', 0.4);
         useDialogue(inter.text ?? ['The Aether Rift swirls...'], () => useGame.getState().openPanel('summon'));
       } else if (inter.kind === 'evolve') this.useEvolveChamber(inter);
+      else if (inter.kind === 'dailyboss') this.useDailyBoss();
       else if (inter.kind === 'sign') useDialogue(inter.text ?? ['It’s a wooden sign.']);
     }
   }
@@ -671,6 +673,62 @@ export class OverworldScene extends Phaser.Scene {
       else { this.tx = dest.x; this.ty = dest.y; this.placePlayer(); this.cameras.main.fadeIn(300); }
     }
     // 'fled' → no reward, trainer not marked defeated (the player may retry).
+    game.mutate(() => {});
+    this.updateMusic(true);
+    this.cameras.main.flash(150);
+  }
+
+  // --- daily boss (one rotating champion per UTC day, beatable once for a bounty) ---
+  private useDailyBoss(): void {
+    const save = useGame.getState().save!;
+    const today = new Date().toISOString().slice(0, 10);
+    if (save.lastDailyBoss === today) {
+      useDialogue(['The Daily Champion rests, already bested today.', 'Return tomorrow for a fresh challenge.']);
+      return;
+    }
+    audio.sfx('sfx_ok', 0.4);
+    const boss = dailyBossOf(today);
+    useDialogue(
+      ['A fearsome Daily Champion appears!', `Best it for a ${DAILY_BOSS_REWARD} ◈ bounty — once per day.`],
+      () => this.startDailyBoss(boss),
+    );
+  }
+
+  private startDailyBoss(boss: { species: string; level: number }): void {
+    const beast = createCreature(boss.species, boss.level);
+    this.busy = true;
+    useGame.getState().mutate((s) => { (s.dex[boss.species] ??= { seen: false, caught: false }).seen = true; });
+    this.cameras.main.flash(240, 255, 200, 120);
+    this.time.delayedCall(280, () => {
+      this.game.events.once('battle:end', (r: BattleResult) => this.onDailyBossEnd(r));
+      this.scene.launch('Battle', { wild: beast, isWild: false });
+      this.scene.pause();
+    });
+  }
+
+  private onDailyBossEnd(result: BattleResult): void {
+    this.scene.stop('Battle');
+    this.scene.resume();
+    this.busy = false;
+    this.input.keyboard!.resetKeys();
+    const game = useGame.getState();
+    if (result.outcome === 'win') {
+      const save = game.save!;
+      save.lastDailyBoss = new Date().toISOString().slice(0, 10);
+      game.addAether(DAILY_BOSS_REWARD);
+      game.persist();
+      game.showToast(`Daily Champion defeated!  +${DAILY_BOSS_REWARD} ◈ $AETHER`);
+    } else if (result.outcome === 'lose') {
+      game.heal();
+      const save = game.save!;
+      const dest = save.lastHeal;
+      const map = dest.map ?? 'world';
+      save.position = { map, x: dest.x, y: dest.y, facing: 'down' };
+      useDialogue(['The Champion overwhelmed you...', 'Your team was restored where you last saved.']);
+      if (map !== this.world.id) this.switchMap(map, dest.x, dest.y, 'down');
+      else { this.tx = dest.x; this.ty = dest.y; this.placePlayer(); this.cameras.main.fadeIn(300); }
+    }
+    // 'fled' → no reward; the player may retry today.
     game.mutate(() => {});
     this.updateMusic(true);
     this.cameras.main.flash(150);

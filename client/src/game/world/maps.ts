@@ -41,7 +41,7 @@ export interface Npc {
   trainerId?: string;
 }
 
-export type InteractKind = 'shrine' | 'sign' | 'restbed' | 'shopcounter' | 'summon' | 'evolve';
+export type InteractKind = 'shrine' | 'sign' | 'restbed' | 'shopcounter' | 'summon' | 'evolve' | 'dailyboss';
 export interface Interactable {
   kind: InteractKind;
   x: number;
@@ -240,6 +240,7 @@ export function buildWorld(): WorldMap {
   for (const lx of [6, 12, 18, 27, 33, 39]) obj('lamp', lx, 14);
   obj('lamp', 20, 6); obj('lamp', 20, 21);
   obj('sign', 20, 22);
+  obj('shrine', 25, 16); // the Daily Champion's altar, just off the spawn
   // a ragged forest edge frames the south of town, funnelling you down the avenue
   treeEdge(2, 18, 23); treeEdge(25, 43, 23);
   pineAt(19, 6); pineAt(25, 6);   // specimen conifers flanking the avenue head
@@ -291,6 +292,7 @@ export function buildWorld(): WorldMap {
 
   const interactables: Interactable[] = [
     { kind: 'sign', x: 20, y: 22, text: ['AETHER TOWN', 'South down the road lies Whisperwood Route — wild Aetherbeasts lurk in its tall grass.'] },
+    { kind: 'dailyboss', x: 25, y: 16 },
   ];
 
   return { id: 'world', kind: 'overworld', width: W, height: H, tiles, solid, objects, npcs, interactables, warps, spawn: { x: 23, y: 16 } };
