@@ -26,7 +26,7 @@ export interface WorldObject {
   y: number;
 }
 
-export type NpcKind = 'professor' | 'shopkeeper' | 'villager';
+export type NpcKind = 'professor' | 'shopkeeper' | 'villager' | 'trainer';
 export interface Npc {
   id: string;
   kind: NpcKind;
@@ -36,6 +36,9 @@ export interface Npc {
   sheet: string;
   /** Optional custom dialogue (overrides the kind's default lines). */
   lines?: string[];
+  /** If set, talking to this NPC (while not yet defeated) starts a trainer/boss
+   *  battle with the matching Trainer from @aether/shared data/trainers. */
+  trainerId?: string;
 }
 
 export type InteractKind = 'shrine' | 'sign' | 'restbed' | 'shopcounter' | 'summon' | 'evolve';
@@ -54,6 +57,10 @@ export interface Warp {
   toX: number;
   toY: number;
   facing?: Direction;
+  /** If set, the warp is blocked until the player holds this badge. */
+  requiresBadge?: string;
+  /** Dialogue shown when the warp is blocked for lack of the badge. */
+  lockedText?: string[];
 }
 
 export interface WorldMap {
@@ -244,6 +251,12 @@ export function buildWorld(): WorldMap {
   rect(26, 42, 15, 7, 'tallgrass', 'whisperwood_deep');
   rect(2, 50, W - 4, 4, 'tallgrass', 'whisperwood_deep');
   rect(22, 50, 2, 4, 'path');
+  // The badge-gated descent into Emberhollow Cave at the south end of the path.
+  warps.push({
+    x: 22, y: 53, toMap: 'emberhollow', toX: 14, toY: 3, facing: 'down',
+    requiresBadge: 'verdant',
+    lockedText: ['A shimmering heat-haze seals the cave mouth to the south.', 'Best the Warden of Whisperwood for the Verdant Badge to pass.'],
+  });
   // one large scenic pond (replaces the scattered small ponds), left of the path
   pond(12, 44, 8, 5);
   // tree clusters framing the route (kept clear of the pond + central path)
@@ -262,6 +275,11 @@ export function buildWorld(): WorldMap {
     { id: 'shop', kind: 'shopkeeper', x: 28, y: 12, facing: 'down', sheet: 'sheet_guy' },         // by the Shop
     { id: 'kid', kind: 'villager', x: 15, y: 15, facing: 'down', sheet: 'sheet_schoolgirl' },
     { id: 'wanderer', kind: 'villager', x: 24, y: 34, facing: 'left', sheet: 'sheet_hiker' },
+    // Whisperwood trainers (on the open grass beside the central path) + the Warden boss.
+    { id: 'tr_w1', kind: 'trainer', x: 25, y: 33, facing: 'down', sheet: 'sheet_hiker', trainerId: 't_whisper_1' },
+    { id: 'tr_w2', kind: 'trainer', x: 20, y: 38, facing: 'down', sheet: 'sheet_schoolgirl', trainerId: 't_whisper_2' },
+    { id: 'tr_w3', kind: 'trainer', x: 25, y: 45, facing: 'down', sheet: 'sheet_guy', trainerId: 't_whisper_3' },
+    { id: 'tr_boss_v', kind: 'trainer', x: 21, y: 51, facing: 'right', sheet: 'sheet_professor', trainerId: 'boss_verdant' },
   ];
 
   const interactables: Interactable[] = [
@@ -365,10 +383,74 @@ function buildInterior(b: BuildingDef): WorldMap {
   };
 }
 
+// ===========================================================================
+// Emberhollow Cave — the second zone, unlocked by the Verdant Badge. A walled
+// cavern of glowing mushroom beds (tallgrass encounters), trainers, and the
+// Ember Sovereign boss in the depths. Self-authored so every tile is controlled.
+// ===========================================================================
+function buildEmberhollow(): WorldMap {
+  const W = 28, H = 22;
+  const tiles: Tile[][] = [];
+  const solid: boolean[][] = [];
+  for (let y = 0; y < H; y++) {
+    tiles.push(Array.from({ length: W }, () => ({ type: 'floor' as TerrainType })));
+    solid.push(Array.from({ length: W }, () => false));
+  }
+  const set = (x: number, y: number, type: TerrainType, zone?: string) => {
+    if (x >= 0 && x < W && y >= 0 && y < H) tiles[y][x] = { type, zone };
+  };
+  const rect = (x0: number, y0: number, w: number, h: number, type: TerrainType, zone?: string) => {
+    for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) set(x, y, type, zone);
+  };
+  // cave walls around the rim (interior is fully open so NPCs can be walked around)
+  for (let x = 0; x < W; x++) { set(x, 0, 'wall'); set(x, H - 1, 'wall'); solid[0][x] = solid[H - 1][x] = true; }
+  for (let y = 0; y < H; y++) { set(0, y, 'wall'); set(W - 1, y, 'wall'); solid[y][0] = solid[y][W - 1] = true; }
+
+  // glowing mushroom beds = the Emberhollow encounter zone
+  rect(3, 5, 8, 5, 'tallgrass', 'emberhollow');
+  rect(17, 5, 8, 5, 'tallgrass', 'emberhollow');
+  rect(6, 12, 16, 5, 'tallgrass', 'emberhollow');
+
+  const objects: WorldObject[] = [];
+  const obj = (kind: ObjKind, x: number, y: number) => {
+    objects.push({ kind, x, y });
+    const d = OBJ_DEF[kind];
+    if (d.solid) {
+      const half = (d.fw - 1) / 2;
+      for (let yy = y - d.fh + 1; yy <= y; yy++)
+        for (let xx = x - half; xx <= x + half; xx++)
+          if (xx >= 0 && xx < W && yy >= 0 && yy < H) solid[yy][xx] = true;
+    }
+  };
+  // atmosphere (kept OFF the central descent column 14 so the boss stays reachable)
+  obj('lamp', 4, 4); obj('lamp', 23, 4); obj('stump', 5, 18); obj('stump', 22, 18);
+  obj('sign', 11, 3);
+
+  const npcs: Npc[] = [
+    { id: 'tr_e1', kind: 'trainer', x: 8, y: 7, facing: 'down', sheet: 'sheet_guy', trainerId: 't_ember_1' },
+    { id: 'tr_e2', kind: 'trainer', x: 20, y: 7, facing: 'down', sheet: 'sheet_hiker', trainerId: 't_ember_2' },
+    { id: 'tr_e3', kind: 'trainer', x: 14, y: 14, facing: 'down', sheet: 'sheet_schoolgirl', trainerId: 't_ember_3' },
+    { id: 'tr_boss_e', kind: 'trainer', x: 14, y: 19, facing: 'up', sheet: 'sheet_professor', trainerId: 'boss_ember' },
+  ];
+  const interactables: Interactable[] = [
+    { kind: 'sign', x: 11, y: 3, text: ['EMBERHOLLOW CAVE', 'Wild beasts roam the glowing mushroom beds. The Ember Sovereign waits in the depths.'] },
+  ];
+  const warps: Warp[] = [
+    { x: 14, y: 1, toMap: 'world', toX: 22, toY: 52, facing: 'up' }, // back up to Whisperwood
+  ];
+
+  return {
+    id: 'emberhollow', kind: 'overworld', width: W, height: H, tiles, solid,
+    objects, npcs, interactables, warps, spawn: { x: 14, y: 3 }, bg: 0x1a0f12,
+  };
+}
+
 let overworldCache: WorldMap | null = null;
-/** Resolve a map by id ('world' = overworld, else a building interior). */
+let emberhollowCache: WorldMap | null = null;
+/** Resolve a map by id ('world' = overworld, 'emberhollow' = the cave, else a building interior). */
 export function getMap(id: string): WorldMap {
   if (id === 'world') return (overworldCache ??= buildWorld());
+  if (id === 'emberhollow') return (emberhollowCache ??= buildEmberhollow());
   const b = BUILDINGS.find((x) => x.interiorId === id);
   if (!b) throw new Error(`Unknown map: ${id}`);
   return buildInterior(b);

@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import {
   ENCOUNTER_ZONES, scaledWildLevel, createCreature, weightedPick, defaultRng, getSpecies, SPECIES_ORDER,
   pendingEvolution, evolve, displayName, wildCount, consumeWild,
-  type Creature, type Direction,
+  hasBadge, isTrainerDefeated, markTrainerDefeated, awardBadge, getTrainer,
+  type Creature, type Direction, type Trainer,
 } from '@aether/shared';
 import { getMap, TILE, ROUTE_START_Y, OBJ_DEF, type WorldMap, type Tile, type Npc, type Interactable } from '../world/maps.js';
 import { useGame } from '../../state/store.js';
@@ -399,6 +400,11 @@ export class OverworldScene extends Phaser.Scene {
     // Step-on warp (house doors + interior exits).
     const warp = this.world.warps.find((w) => w.x === this.tx && w.y === this.ty);
     if (warp) {
+      if (warp.requiresBadge && !hasBadge(useGame.getState().save!, warp.requiresBadge)) {
+        audio.sfx('sfx_buzzer', 0.25);
+        useDialogue(warp.lockedText ?? ['The way is sealed for now.']);
+        return;
+      }
       audio.sfx('sfx_ok', 0.3);
       this.switchMap(warp.toMap, warp.toX, warp.toY, warp.facing ?? 'down');
       return;
@@ -417,9 +423,10 @@ export class OverworldScene extends Phaser.Scene {
       if (tile.zone) {
         const save = useGame.getState().save!;
         const now = Date.now();
-        // Encounters are gated by the timed wild pool: a beast becomes available
-        // every ~15 min (slower + fewer as your team levels), refilling even while
-        // you're away. You stumble on one by walking; each fight consumes one slot.
+        // Encounters are gated by the timed wild pool: beasts accrue on a level-scaled
+        // interval (~2 min early, up to a 90-min cap) toward a level-scaled count (3 for
+        // new tamers, tightening to 1 late game), refilling even while you're away. You
+        // stumble on one by walking; each fight consumes one slot.
         const available = wildCount(save, now);
         const caught = Object.values(save.dex).filter((e) => e.caught).length;
         const forceFirst = this.firstGrassStep && caught <= 1;
@@ -508,6 +515,10 @@ export class OverworldScene extends Phaser.Scene {
 
   private talkToNpc(npc: Npc): void {
     audio.sfx('sfx_ok', 0.4);
+    if (npc.trainerId) {
+      this.handleTrainerNpc(npc.trainerId);
+      return;
+    }
     if (npc.lines) {
       useDialogue(npc.lines);
       return;
@@ -597,6 +608,68 @@ export class OverworldScene extends Phaser.Scene {
       }
     }
     // Persist any in-battle changes (HP, EXP, level, evolution mutated in place).
+    game.mutate(() => {});
+    this.updateMusic(true);
+    this.cameras.main.flash(150);
+  }
+
+  // --- trainer / boss battles ---
+  private handleTrainerNpc(trainerId: string): void {
+    const trainer = getTrainer(trainerId);
+    if (!trainer) return;
+    const save = useGame.getState().save!;
+    if (isTrainerDefeated(save, trainerId)) {
+      useDialogue(trainer.kind === 'boss'
+        ? [`${trainer.name}: You bested me fair and square, champion.`]
+        : [`${trainer.name}: Good to see you again, tamer!`]);
+      return;
+    }
+    // Play the intro lines, then drop into the trainer battle.
+    useDialogue(trainer.intro, () => this.startTrainerEncounter(trainer));
+  }
+
+  private startTrainerEncounter(trainer: Trainer): void {
+    this.busy = true;
+    audio.sfx('jingle_battle_intro', 0.4);
+    this.cameras.main.flash(220, 255, 220, 180);
+    this.time.delayedCall(260, () => {
+      this.game.events.once('battle:end', (result: BattleResult) => this.onTrainerBattleEnd(result, trainer));
+      this.scene.launch('Battle', { trainer });
+      this.scene.pause();
+    });
+  }
+
+  private onTrainerBattleEnd(result: BattleResult, trainer: Trainer): void {
+    this.scene.stop('Battle');
+    this.scene.resume();
+    this.busy = false;
+    this.input.keyboard!.resetKeys();
+    const game = useGame.getState();
+
+    if (result.outcome === 'win') {
+      const save = game.save!;
+      markTrainerDefeated(save, trainer.id);
+      game.addAether(trainer.moneyReward);
+      const lines = [...trainer.defeat, `You won!  +${trainer.moneyReward} ◈ $AETHER`];
+      if (trainer.badge) {
+        awardBadge(save, trainer.badge);
+        if (trainer.badge === 'ember') {
+          lines.push('With both badges earned, you are Arena-ready! Tap the ⚔ Arena icon to battle other tamers.');
+        }
+      }
+      game.persist();
+      useDialogue(lines);
+    } else if (result.outcome === 'lose') {
+      game.heal();
+      const save = game.save!;
+      const dest = save.lastHeal;
+      const map = dest.map ?? 'world';
+      save.position = { map, x: dest.x, y: dest.y, facing: 'down' };
+      useDialogue(['You were overwhelmed...', 'Your team was restored where you last saved.']);
+      if (map !== this.world.id) this.switchMap(map, dest.x, dest.y, 'down');
+      else { this.tx = dest.x; this.ty = dest.y; this.placePlayer(); this.cameras.main.fadeIn(300); }
+    }
+    // 'fled' → no reward, trainer not marked defeated (the player may retry).
     game.mutate(() => {});
     this.updateMusic(true);
     this.cameras.main.flash(150);

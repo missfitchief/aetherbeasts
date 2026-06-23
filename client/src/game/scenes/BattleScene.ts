@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import {
-  startBattle, resolveTurn, mustSwitch, applyForcedSwitch, getSpecies, getMove, getItem,
-  statOf, expProgress, displayName, evolve, removeItem,
+  startBattle, startTrainerBattle, resolveTurn, mustSwitch, applyForcedSwitch, getSpecies, getMove, getItem,
+  statOf, expProgress, displayName, evolve, removeItem, createCreature,
   TYPE_COLOR,
-  type Creature, type BattleState, type BattleEvent, type PlayerAction, type Side,
+  type Creature, type BattleState, type BattleEvent, type PlayerAction, type Side, type Trainer,
 } from '@aether/shared';
 import { useGame } from '../../state/store.js';
 import { emitQuestProgress } from '../../net/net.js';
@@ -45,14 +45,22 @@ export class BattleScene extends Phaser.Scene {
   private menuGfx: Phaser.GameObjects.Container | null = null;
   private skip = false;
   private evolveQueue: { uid: string; into: string }[] = [];
+  private trainer: Trainer | null = null;
 
   constructor() {
     super('Battle');
   }
 
-  init(data: { wild: Creature; isWild: boolean }): void {
+  init(data: { wild?: Creature; isWild?: boolean; trainer?: Trainer }): void {
     const party = useGame.getState().save!.party;
-    this.state = startBattle(party, data.wild, { isWild: data.isWild });
+    if (data.trainer) {
+      this.trainer = data.trainer;
+      const team = data.trainer.team.map((m) => createCreature(m.species, m.level));
+      this.state = startTrainerBattle(party, team);
+    } else {
+      this.trainer = null;
+      this.state = startBattle(party, data.wild!, { isWild: data.isWild });
+    }
     this.evolveQueue = [];
     this.mode = 'idle';
   }
@@ -244,7 +252,12 @@ export class BattleScene extends Phaser.Scene {
     ]);
     this.tweens.add({ targets: this.enemyPanel, alpha: 1, duration: 200 });
     this.tweens.add({ targets: this.playerPanel, alpha: 1, duration: 200 });
-    await this.say(`A wild ${displayName(this.state.enemy.creature)} appeared!`);
+    if (this.trainer) {
+      await this.say(`${this.trainer.name} wants to battle!`);
+      await this.say(`${this.trainer.name} sent out ${displayName(this.state.enemy.creature)}!`, { quick: true });
+    } else {
+      await this.say(`A wild ${displayName(this.state.enemy.creature)} appeared!`);
+    }
   }
 
   private async commandPhase(): Promise<PlayerAction | null> {
@@ -286,6 +299,7 @@ export class BattleScene extends Phaser.Scene {
     const save = useGame.getState().save!;
     const usable = save.bag.filter((s) => {
       const it = getItem(s.itemId);
+      if (this.trainer && it.category === 'catch') return false; // can't catch a trainer's beast
       return it.category === 'catch' || it.effect.kind === 'heal-hp' || it.effect.kind === 'cure';
     });
     if (usable.length === 0) {
@@ -387,6 +401,10 @@ export class BattleScene extends Phaser.Scene {
           break;
         case 'run':
           if (ev.success) await this.tweenP({ targets: this.playerSprite, x: -100, alpha: 0, duration: 300 });
+          break;
+        case 'switch':
+          if (ev.side === 'enemy') await this.swapEnemySprite();
+          else await this.swapPlayerSprite();
           break;
         case 'end':
           break;
@@ -547,6 +565,19 @@ export class BattleScene extends Phaser.Scene {
     this.refreshHpNum();
     this.refreshExp();
     await this.wait(50);
+  }
+
+  /** Trainer sent out their next beast — swap the enemy sprite + panel text. */
+  private async swapEnemySprite(): Promise<void> {
+    const e = this.state.enemy.creature;
+    this.lastPct.enemy = e.currentHp / statOf(e, 'mhp');
+    this.enemySprite.setTexture(`mon_${e.speciesId}`).setAlpha(1).setScale(0.74).setPosition(ENEMY_X, ENEMY_Y);
+    if (e.shiny) this.enemySprite.setTint(0xfff2a8); else this.enemySprite.clearTint();
+    this.enemyHp.redraw(this.lastPct.enemy);
+    const texts = this.enemyPanel.list.filter((o): o is Phaser.GameObjects.Text => o instanceof Phaser.GameObjects.Text);
+    if (texts[0]) texts[0].setText(displayName(e)); // name (added first in makePanel)
+    if (texts[1]) texts[1].setText(`Lv${e.level}`); // level (added second)
+    await this.wait(60);
   }
 
   private tintAil(side: Side): void {
