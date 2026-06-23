@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { Server, type Socket } from 'socket.io';
 import type { SaveData, PlayerAction, SummonReport, QuestProgressType } from '@aether/shared';
-import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, toQuestView } from '@aether/shared';
+import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, claimLoginReward, addItem, toQuestView } from '@aether/shared';
 import { PORT, corsOrigin, TREASURY_ADDRESS, AETHER_MINT, AETHER_DECIMALS, QUOTE_TTL_MS, ONCHAIN_SUMMON_ENABLED, validateConfig } from './config.js';
 import { Store, publicProfile, type PlayerRecord } from './store.js';
 import { buildLoginMessage, verifySignature } from './auth.js';
@@ -246,6 +246,24 @@ function bind(socket: Socket) {
       questId: p.questId, aether: result.aether, points: result.points, streakBonus: result.streakBonus,
       save: rec.save, view: toQuestView(qs, now),
     });
+  });
+
+  // Claim today's login-calendar reward: grant ◈/items into the save (server-authoritative).
+  socket.on('login:claim', () => {
+    const id = pid();
+    if (!id) return;
+    const rec = store.getById(id);
+    if (!rec || !rec.save) return;
+    const now = Date.now();
+    const qs = store.getQuests(id, now);
+    if (!qs) return;
+    const res = claimLoginReward(qs, now);
+    if (!res) return; // already claimed today
+    if (res.reward.aether) rec.save.aether = (rec.save.aether ?? 0) + res.reward.aether;
+    if (res.reward.itemId) addItem(rec.save, res.reward.itemId, res.reward.qty ?? 1);
+    rec.save.updatedAt = Math.max((rec.save.updatedAt ?? 0) + 1, now);
+    store.saveProgress(id, rec.save);
+    socket.emit('login:claimed', { day: res.day, reward: res.reward, view: toQuestView(qs, now) });
   });
 
   socket.on('disconnect', () => {

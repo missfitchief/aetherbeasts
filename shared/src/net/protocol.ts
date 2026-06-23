@@ -114,6 +114,8 @@ export interface QuestView {
   daily: QuestViewItem[];
   weekly: QuestViewItem[];
   onboarding: QuestViewItem[];
+  /** 7-day login reward cycle for the calendar UI. */
+  login: { cycleDay: number; claimableToday: boolean; rewards: string[] };
   streak: number;
   seasonPoints: number;
   dailyResetsInMs: number;
@@ -148,6 +150,7 @@ export interface ServerToClient {
   // Quests: the authoritative view, and the result of a claim (with the updated save).
   'quest:state': (p: QuestView) => void;
   'quest:claimed': (p: { questId: string; aether: number; points: number; streakBonus: number; save: SaveData; view: QuestView }) => void;
+  'login:claimed': (p: { day: number; reward: { aether?: number; itemId?: string; qty?: number; label: string }; view: QuestView }) => void;
   'error': (p: { message: string }) => void;
 }
 

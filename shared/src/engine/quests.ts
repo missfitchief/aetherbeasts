@@ -33,6 +33,8 @@ export interface QuestState {
   daily: { date: string; quests: QuestProgress[] };       // date = UTC yyyy-mm-dd
   weekly: { weekStart: string; quests: QuestProgress[] };  // weekStart = UTC Monday yyyy-mm-dd
   onboarding: QuestProgress[];                             // one-time Starter Missions (never roll over)
+  /** 7-day login reward cycle: `day` = last-claimed slot (0..7), `lastClaim` = UTC date. */
+  loginCalendar: { day: number; lastClaim: string };
   streak: { count: number; lastDay: string };             // lastDay = last UTC date a daily was claimed
   seasonPoints: number;
 }
@@ -66,6 +68,18 @@ export const ONBOARDING: QuestDef[] = [
   { id: 'ob_first_summon', kind: 'onboarding', goal: 'Summon at the Aether Rift', type: 'summon',     target: 1,  aether: 200, points: 12 },
   { id: 'ob_catch_five',   kind: 'onboarding', goal: 'Catch 5 beasts',            type: 'catch',      target: 5,  aether: 200, points: 12 },
   { id: 'ob_win_ten',      kind: 'onboarding', goal: 'Win 10 battles',            type: 'battle_win', target: 10, aether: 350, points: 20 },
+];
+
+/** 7-day login reward cycle (index 0 = day 1). Day 7 is a free pull's worth of ◈. */
+export interface LoginReward { aether?: number; itemId?: string; qty?: number; label: string; }
+export const LOGIN_REWARDS: LoginReward[] = [
+  { aether: 100, label: '100 ◈' },
+  { aether: 150, label: '150 ◈' },
+  { itemId: 'pactstone', qty: 3, label: '3 Pact Stones' },
+  { aether: 250, label: '250 ◈' },
+  { itemId: 'potion', qty: 2, label: '2 Potions' },
+  { aether: 400, label: '400 ◈' },
+  { aether: 1600, label: '1600 ◈ — free pull!' },
 ];
 
 const DAILY_COUNT = 3;
@@ -131,6 +145,7 @@ export function freshQuestState(accountId: string, now: number): QuestState {
     daily: { date: utcDate(now), quests: assignDailies(accountId, utcDate(now)) },
     weekly: { weekStart: utcWeekStart(now), quests: freshWeekly() },
     onboarding: freshOnboarding(),
+    loginCalendar: { day: 0, lastClaim: '' },
     streak: { count: 0, lastDay: '' },
     seasonPoints: 0,
   };
@@ -144,6 +159,7 @@ export function rollOver(state: QuestState, accountId: string, now: number): voi
   if (state.weekly.weekStart !== week) state.weekly = { weekStart: week, quests: freshWeekly() };
   // Onboarding is one-time: never reset it, but backfill accounts that predate it.
   if (!Array.isArray(state.onboarding)) state.onboarding = freshOnboarding();
+  if (!state.loginCalendar) state.loginCalendar = { day: 0, lastClaim: '' };
 }
 
 /** Advance every matching, unclaimed quest (daily + weekly) toward its target. */
@@ -192,6 +208,21 @@ export function claim(state: QuestState, questId: string, now: number): ClaimRes
   return { aether: def.aether + bonus, points: def.points, streakBonus: bonus };
 }
 
+/** Claim today's login-calendar reward (idempotent per UTC day). A consecutive
+ *  day advances the 7-slot cycle; a gap restarts at day 1. Returns the day + the
+ *  reward for the caller to grant into the save, or null if already claimed today. */
+export function claimLoginReward(state: QuestState, now: number): { day: number; reward: LoginReward } | null {
+  if (!state.loginCalendar) state.loginCalendar = { day: 0, lastClaim: '' };
+  const lc = state.loginCalendar;
+  const today = utcDate(now);
+  if (lc.lastClaim === today) return null; // already claimed today
+  const consecutive = lc.lastClaim === utcDate(now - DAY_MS);
+  const day = consecutive ? (lc.day % 7) + 1 : 1;
+  lc.day = day;
+  lc.lastClaim = today;
+  return { day, reward: LOGIN_REWARDS[day - 1] };
+}
+
 // ---- read-only projection for the client ------------------------------------
 function viewItem(qp: QuestProgress): QuestViewItem | null {
   const def = questDef(qp.id);
@@ -206,6 +237,11 @@ export function toQuestView(state: QuestState, now: number): QuestView {
     daily: items(state.daily.quests),
     weekly: items(state.weekly.quests),
     onboarding: items(state.onboarding ?? []),
+    login: {
+      cycleDay: state.loginCalendar?.day ?? 0,
+      claimableToday: (state.loginCalendar?.lastClaim ?? '') !== utcDate(now),
+      rewards: LOGIN_REWARDS.map((r) => r.label),
+    },
     streak: state.streak.count,
     seasonPoints: state.seasonPoints,
     dailyResetsInMs: Math.max(0, nextUtcMidnight(now) - now),

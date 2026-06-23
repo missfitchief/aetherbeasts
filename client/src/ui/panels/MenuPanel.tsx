@@ -15,6 +15,7 @@ export function MenuPanel() {
   const items: { emoji: string; label: string; sub?: string; onClick: () => void }[] = [
     { emoji: '🛡️', label: 'Team', sub: `${save.party.length}/6`, onClick: () => openPanel('party') },
     { emoji: '🗓️', label: 'Quests', sub: 'Daily / Weekly', onClick: () => openPanel('quests') },
+    { emoji: '🎁', label: 'Daily Login', sub: 'Reward', onClick: () => openPanel('login') },
     { emoji: '✦', label: 'Aether Rift', sub: 'Summon', onClick: () => openPanel('summon') },
     { emoji: '🎒', label: 'Bag', onClick: () => openPanel('bag') },
     { emoji: '📖', label: 'Aether-Dex', sub: `${dc.caught}/${dc.total}`, onClick: () => openPanel('dex') },

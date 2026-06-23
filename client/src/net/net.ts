@@ -14,7 +14,7 @@ import type {
   QuestView,
   QuestProgressEvent,
 } from '@aether/shared';
-import { DEFAULT_STAKE } from '@aether/shared';
+import { DEFAULT_STAKE, addItem } from '@aether/shared';
 import { useGame } from '../state/store.js';
 import { localSaveAdapter, setSaveAdapter, type SaveAdapter } from '../state/persistence.js';
 
@@ -315,6 +315,14 @@ function wire(s: Socket) {
     const bonus = p.streakBonus > 0 ? ` (+${p.streakBonus} streak)` : '';
     toast(`Quest complete! +${p.aether} ◈${bonus}`);
   });
+
+  s.on('login:claimed', (p: { day: number; reward: { aether?: number; itemId?: string; qty?: number; label: string }; view: QuestView }) => {
+    // Server already granted + persisted; reflect the delta locally without clobbering position.
+    if (p.reward.aether) useGame.getState().addAether(p.reward.aether);
+    if (p.reward.itemId) useGame.getState().mutate((sv) => addItem(sv, p.reward.itemId!, p.reward.qty ?? 1));
+    useNet.setState({ questView: p.view });
+    toast(`Day ${p.day} login reward: ${p.reward.label}`);
+  });
 }
 
 // ---- actions ---------------------------------------------------------------
@@ -422,6 +430,10 @@ export function emitQuestProgress(type: QuestProgressEvent, amount = 1) {
 /** Claim a completed quest's reward. */
 export function claimQuest(questId: string) {
   if (socket?.connected) socket.emit('quest:claim', { questId });
+}
+
+export function loginClaim() {
+  if (socket?.connected) socket.emit('login:claim');
 }
 /** Ask the server for the current quest board (e.g. on opening the panel). */
 export function refreshQuests() {

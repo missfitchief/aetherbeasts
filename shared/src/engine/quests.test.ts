@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   freshQuestState, assignDailies, rollOver, applyProgress, claim, toQuestView,
   streakBonus, utcDate, utcWeekStart, questDef, DAILY_POOL, ONBOARDING,
+  claimLoginReward, LOGIN_REWARDS,
 } from './quests.js';
 
 const DAY = 86_400_000;
@@ -159,5 +160,33 @@ describe('onboarding (Starter Missions)', () => {
     rollOver(s, 'acct', T_TUE + 8 * DAY);
     expect(Array.isArray(s.onboarding)).toBe(true);
     expect(s.onboarding).toHaveLength(ONBOARDING.length);
+  });
+});
+
+describe('login calendar', () => {
+  it('advances day-by-day, is idempotent per day, and resets after a gap', () => {
+    const s = freshQuestState('acct', T_TUE);
+    const r1 = claimLoginReward(s, T_TUE);
+    expect(r1?.day).toBe(1);
+    expect(r1?.reward).toBe(LOGIN_REWARDS[0]);
+    expect(claimLoginReward(s, T_TUE)).toBeNull();          // same day -> already claimed
+    expect(claimLoginReward(s, T_TUE + DAY)?.day).toBe(2);  // consecutive -> day 2
+    expect(claimLoginReward(s, T_TUE + 3 * DAY)?.day).toBe(1); // gap -> reset to day 1
+  });
+
+  it('wraps the 7-day cycle (8th consecutive claim is day 1 again)', () => {
+    const s = freshQuestState('acct', T_TUE);
+    let day = 0;
+    for (let i = 0; i < 8; i++) day = claimLoginReward(s, T_TUE + i * DAY)!.day;
+    expect(day).toBe(1);
+  });
+
+  it('the quest view exposes the login cycle', () => {
+    const s = freshQuestState('acct', T_TUE);
+    const v = toQuestView(s, T_TUE);
+    expect(v.login.rewards).toHaveLength(7);
+    expect(v.login.claimableToday).toBe(true);
+    claimLoginReward(s, T_TUE);
+    expect(toQuestView(s, T_TUE).login.claimableToday).toBe(false);
   });
 });

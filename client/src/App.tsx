@@ -37,11 +37,13 @@ export function App() {
   useEffect(() => {
     if (questPopupShown || screen !== 'playing' || !questView) return;
     questPopupShown = true; // one-shot per session, evaluated at login
+    const loginReady = questView.login?.claimableToday;
     const hasUnclaimed = questView.daily.some((q) => !q.claimed) || questView.weekly.some((q) => !q.claimed) || (questView.onboarding ?? []).some((q) => !q.claimed);
-    if (!hasUnclaimed) return;
+    if (!loginReady && !hasUnclaimed) return;
     const t = setTimeout(() => {
       const g = useGame.getState();
-      if (!g.panel && !g.dialogue) g.openPanel('quests'); // don't clobber a panel or the intro
+      // Greet returning players with the daily login reward first, else the quest board.
+      if (!g.panel && !g.dialogue) g.openPanel(loginReady ? 'login' : 'quests');
     }, 700);
     return () => clearTimeout(t);
   }, [screen, questView]);
