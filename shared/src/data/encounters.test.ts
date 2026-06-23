@@ -36,6 +36,29 @@ describe('scaledWildLevel', () => {
   });
 });
 
+describe('Emberhollow Cave zone', () => {
+  it('exists with a higher level band and valid weighted species', () => {
+    const z = ENCOUNTER_ZONES.emberhollow;
+    expect(z).toBeTruthy();
+    expect(z.levelRange[0]).toBeGreaterThanOrEqual(10);
+    expect(z.levelRange[1]).toBeLessThanOrEqual(26);
+    expect(z.table.length).toBeGreaterThanOrEqual(4);
+    for (const e of z.table) {
+      expect(e.weight).toBeGreaterThan(0);
+      expect(getSpecies(e.species)).toBeTruthy(); // throws on an invalid id
+    }
+  });
+
+  it('scaledWildLevel stays within the cave band for a mid-level party', () => {
+    const z = ENCOUNTER_ZONES.emberhollow;
+    for (let i = 0; i < 80; i++) {
+      const l = scaledWildLevel(z, 20, rng);
+      expect(l).toBeGreaterThanOrEqual(z.levelRange[0]);
+      expect(l).toBeLessThanOrEqual(22); // partyTop(20)+2 cap
+    }
+  });
+});
+
 describe('monster evolutions (from the pack)', () => {
   const LINES: [string, string, number][] = [
     ['grodent', 'ratssive', 16],

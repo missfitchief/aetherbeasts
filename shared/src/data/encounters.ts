@@ -34,6 +34,18 @@ export const ENCOUNTER_ZONES: Record<string, EncounterZone> = {
       { species: 'draquatic', weight: 4 },
     ],
   },
+  emberhollow: {
+    id: 'emberhollow',
+    name: 'Emberhollow Cave',
+    levelRange: [12, 24],
+    table: [
+      { species: 'grodent', weight: 26 },
+      { species: 'moldole', weight: 24 },
+      { species: 'drachnid', weight: 18 },
+      { species: 'spookshroom', weight: 18 },
+      { species: 'jestar', weight: 14 },
+    ],
+  },
 };
 
 /**
