@@ -59,32 +59,40 @@ export class Store {
       console.log('[store] in-memory mode (no DATABASE_URL set)');
       return;
     }
-    // Hosted Postgres (Neon/Supabase/Render) requires SSL; local does not.
-    const local = /localhost|127\.0\.0\.1/.test(DATABASE_URL);
-    this.pool = new Pool({
-      connectionString: DATABASE_URL,
-      ssl: local ? false : { rejectUnauthorized: false },
-    });
-    await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS players (
-        id text PRIMARY KEY,
-        token text UNIQUE NOT NULL,
-        wallet text UNIQUE,
-        data jsonb NOT NULL,
-        updated_at timestamptz NOT NULL DEFAULT now()
-      );
-    `);
-    // Durable single-use ledger for on-chain payment signatures (survives
-    // restarts + horizontal scaling, so a paid tx can never be replayed).
-    await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS used_tx_sigs (
-        sig text PRIMARY KEY,
-        used_at timestamptz NOT NULL DEFAULT now()
-      );
-    `);
-    const { rows } = await this.pool.query('SELECT data FROM players');
-    for (const r of rows) this.index(r.data as PlayerRecord);
-    console.log(`[store] postgres mode, hydrated ${rows.length} player(s)`);
+    try {
+      // Hosted Postgres (Neon/Supabase/Render) requires SSL; local does not.
+      const local = /localhost|127\.0\.0\.1/.test(DATABASE_URL);
+      const pool = new Pool({
+        connectionString: DATABASE_URL,
+        ssl: local ? false : { rejectUnauthorized: false },
+      });
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS players (
+          id text PRIMARY KEY,
+          token text UNIQUE NOT NULL,
+          wallet text UNIQUE,
+          data jsonb NOT NULL,
+          updated_at timestamptz NOT NULL DEFAULT now()
+        );
+      `);
+      // Durable single-use ledger for on-chain payment signatures (survives
+      // restarts + horizontal scaling, so a paid tx can never be replayed).
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS used_tx_sigs (
+          sig text PRIMARY KEY,
+          used_at timestamptz NOT NULL DEFAULT now()
+        );
+      `);
+      const { rows } = await pool.query('SELECT data FROM players');
+      for (const r of rows) this.index(r.data as PlayerRecord);
+      this.pool = pool; // only switch to DB mode once it's fully reachable
+      console.log(`[store] postgres mode, hydrated ${rows.length} player(s)`);
+    } catch (e) {
+      // A bad/unreachable DATABASE_URL must NOT take the server down — fall back to
+      // in-memory so the game still runs (just without persistence).
+      this.pool = null;
+      console.error('[store] DATABASE_URL set but connection FAILED — falling back to in-memory. Fix the connection string to persist accounts.', e instanceof Error ? e.message : e);
+    }
   }
 
   private index(rec: PlayerRecord) {
