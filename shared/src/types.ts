@@ -167,6 +167,10 @@ export interface SaveData {
   seenIntro: boolean;
   /** Ids of one-time tutorial tips already shown (buildings, features). */
   seenTips: string[];
+  /** Earned gym/boss badges — gate zone access (e.g. 'verdant', 'ember'). */
+  badges: string[];
+  /** Ids of trainers/bosses already defeated (one-time battles, no rematch). */
+  defeatedTrainers: string[];
   createdAt: number;
   updatedAt: number;
 }

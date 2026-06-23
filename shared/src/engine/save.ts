@@ -6,7 +6,7 @@ import { createCreature } from './factory.js';
 import { statOf } from './formulas.js';
 import type { RNG } from './rng.js';
 
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 const BOX_TOTAL = BOX_PAGE_SIZE * BOX_PAGES;
 
 /** Onboarding balance: enough $AETHER for a featured 10-pull + some shop runs. */
@@ -41,6 +41,8 @@ export function newSave(playerId: string, playerName: string): SaveData {
     playtimeSteps: 0,
     seenIntro: false,
     seenTips: [],
+    badges: [],
+    defeatedTrainers: [],
     createdAt: 0,
     updatedAt: 0,
   };
@@ -129,6 +131,27 @@ export function grantAether(save: SaveData, n: number): void {
   save.aether = (save.aether ?? 0) + n;
 }
 
+// ---- badges + one-time trainer defeats (the content-arc gates) -------------
+export function hasBadge(save: SaveData, id: string): boolean {
+  return Array.isArray(save.badges) && save.badges.includes(id);
+}
+
+/** Grant a badge once (idempotent). */
+export function awardBadge(save: SaveData, id: string): void {
+  if (!Array.isArray(save.badges)) save.badges = [];
+  if (!save.badges.includes(id)) save.badges.push(id);
+}
+
+export function isTrainerDefeated(save: SaveData, id: string): boolean {
+  return Array.isArray(save.defeatedTrainers) && save.defeatedTrainers.includes(id);
+}
+
+/** Record a trainer/boss as beaten once (idempotent; no rematch). */
+export function markTrainerDefeated(save: SaveData, id: string): void {
+  if (!Array.isArray(save.defeatedTrainers)) save.defeatedTrainers = [];
+  if (!save.defeatedTrainers.includes(id)) save.defeatedTrainers.push(id);
+}
+
 /** Backfill fields added in later save versions so older saves keep working. */
 export function normalizeSave(save: SaveData): SaveData {
   // Coerce core collections before iterating — a corrupt/partial/legacy blob (or
@@ -152,6 +175,8 @@ export function normalizeSave(save: SaveData): SaveData {
   if (!save.wild || typeof save.wild.lastTick !== 'number') save.wild = { lastTick: 0 };
   if (legacyIncubator) delete (save as unknown as { incubator?: unknown }).incubator;
   if (!Array.isArray(save.seenTips)) save.seenTips = []; // tutorial tips (v6)
+  if (!Array.isArray(save.badges)) save.badges = []; // gym/boss badges (v7)
+  if (!Array.isArray(save.defeatedTrainers)) save.defeatedTrainers = []; // one-time trainers (v7)
   save.version = SAVE_VERSION;
   return save;
 }
