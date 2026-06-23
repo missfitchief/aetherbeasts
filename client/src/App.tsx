@@ -9,6 +9,7 @@ import { Dialogue } from './ui/Dialogue.js';
 import { Toast } from './ui/Toast.js';
 import { Panels } from './ui/Panels.js';
 import { ArenaOverlay } from './ui/pvp/ArenaOverlay.js';
+import { TouchControls } from './ui/TouchControls.js';
 import { LoginGate } from './ui/LoginGate.js';
 import { startNet } from './net/net.js';
 import { useNet } from './net/net.js';
@@ -70,6 +71,7 @@ export function App() {
           <Dialogue />
           <Toast />
           <ArenaOverlay />
+          <TouchControls />
         </>
       )}
     </div>
