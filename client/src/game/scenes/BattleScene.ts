@@ -397,6 +397,12 @@ export class BattleScene extends Phaser.Scene {
           audio.sfx('jingle_levelup', 0.6);
           this.refreshExp();
           await this.say(`${this.playerName()} grew to Lv${ev.level}!`);
+          // A level-up fully restores the fighter — animate the HP bar refilling.
+          if (ev.uid === this.state.player.creature.uid) {
+            const pc = this.state.player.creature;
+            await this.drainHp('player', pc.currentHp / statOf(pc, 'mhp'));
+            this.refreshHpNum();
+          }
           await this.sparkle(this.playerSprite);
           break;
         case 'learn':

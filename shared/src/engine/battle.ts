@@ -298,7 +298,10 @@ function awardKillExp(state: BattleState, defeated: Creature, out: BattleEvent[]
   const amount = expYield(defeated);
   out.push({ type: 'exp', uid: active.uid, amount });
   const res: LevelUpResult = gainExp(active, amount);
-  if (res.levelsGained > 0) out.push({ type: 'levelup', uid: active.uid, level: res.newLevel });
+  if (res.levelsGained > 0) {
+    out.push({ type: 'levelup', uid: active.uid, level: res.newLevel });
+    active.currentHp = statOf(active, 'mhp'); // a battle level-up fully restores the fighter's HP
+  }
   for (const m of res.newMoves) out.push({ type: 'learn', uid: active.uid, moveId: m });
   const evo = res.evolveInto ?? pendingEvolution(active);
   if (evo) out.push({ type: 'evolve-ready', uid: active.uid, into: evo });
