@@ -542,7 +542,8 @@ export class OverworldScene extends Phaser.Scene {
     audio.sfx('sfx_ok', 0.4);
     useGame.getState().heal();
     const save = useGame.getState().save!;
-    save.lastHeal = { map: 'world', x: this.tx, y: this.ty + 1 };
+    save.lastHeal = { map: this.world.id, x: this.tx, y: this.ty + 1 };
+    useGame.getState().persist();
     audio.sfx('jingle_heal', 0.6);
     useDialogue(['You touch the Aether Shrine.', 'Your team is fully restored, and your journey is saved.']);
   }

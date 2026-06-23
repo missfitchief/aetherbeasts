@@ -425,6 +425,7 @@ function buildEmberhollow(): WorldMap {
   // atmosphere (kept OFF the central descent column 14 so the boss stays reachable)
   obj('lamp', 4, 4); obj('lamp', 23, 4); obj('stump', 5, 18); obj('stump', 22, 18);
   obj('sign', 11, 3);
+  obj('shrine', 17, 3); // heal/save point near the entrance so a cave whiteout doesn't bounce to town
 
   const npcs: Npc[] = [
     { id: 'tr_e1', kind: 'trainer', x: 8, y: 7, facing: 'down', sheet: 'sheet_guy', trainerId: 't_ember_1' },
@@ -434,6 +435,7 @@ function buildEmberhollow(): WorldMap {
   ];
   const interactables: Interactable[] = [
     { kind: 'sign', x: 11, y: 3, text: ['EMBERHOLLOW CAVE', 'Wild beasts roam the glowing mushroom beds. The Ember Sovereign waits in the depths.'] },
+    { kind: 'shrine', x: 17, y: 3 },
   ];
   const warps: Warp[] = [
     { x: 14, y: 1, toMap: 'world', toX: 22, toY: 52, facing: 'up' }, // back up to Whisperwood

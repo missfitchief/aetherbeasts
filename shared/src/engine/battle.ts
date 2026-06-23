@@ -302,6 +302,17 @@ function awardKillExp(state: BattleState, defeated: Creature, out: BattleEvent[]
   for (const m of res.newMoves) out.push({ type: 'learn', uid: active.uid, moveId: m });
   const evo = res.evolveInto ?? pendingEvolution(active);
   if (evo) out.push({ type: 'evolve-ready', uid: active.uid, into: evo });
+
+  // Party EXP-share: living benched members gain a fraction silently, so a full
+  // team keeps pace with multi-beast trainer/boss fights without grinding one solo
+  // carry (this is what makes off-type starters and caught beasts viable). No
+  // events — they aren't on screen; their level shows in the party menu / on send-out.
+  const share = Math.floor(amount * 0.5);
+  if (share > 0) {
+    for (const c of state.party) {
+      if (c.uid !== active.uid && c.currentHp > 0) gainExp(c, share);
+    }
+  }
 }
 
 /** Wild win: a single enemy — award its exp and end the battle. */

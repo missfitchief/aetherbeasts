@@ -56,7 +56,7 @@ export const TRAINERS: Trainer[] = [
   // --- Boss 1: Warden Sylva -> Verdant Badge -> unlocks Emberhollow --------
   {
     id: 'boss_verdant', name: 'Warden Sylva', kind: 'boss', zone: 'whisperwood',
-    team: [{ species: 'moldole', level: 13 }, { species: 'spookshroom', level: 14 }, { species: 'flowrath', level: 16 }],
+    team: [{ species: 'moldole', level: 11 }, { species: 'spookshroom', level: 12 }, { species: 'flowrath', level: 14 }],
     moneyReward: 450, badge: 'verdant',
     intro: ["So you're the one rattling my woods.", 'Beat me and the Verdant Badge - and the cave beyond - are yours.'],
     defeat: ['...Magnificent. The Verdant Badge is yours.', 'The heat-haze at the south path will part for you now. Emberhollow awaits.'],
@@ -89,8 +89,8 @@ export const TRAINERS: Trainer[] = [
   {
     id: 'boss_ember', name: 'Ember Sovereign Cinder', kind: 'boss', zone: 'emberhollow',
     team: [
-      { species: 'ratssive', level: 22 }, { species: 'shroomole', level: 23 },
-      { species: 'wraithmanita', level: 24 }, { species: 'charachne', level: 26 },
+      { species: 'ratssive', level: 21 }, { species: 'shroomole', level: 22 },
+      { species: 'wraithmanita', level: 23 }, { species: 'charachne', level: 24 },
     ],
     moneyReward: 850, badge: 'ember',
     intro: ['Few reach my magma throne. Fewer leave with the Ember Badge.', 'Show me a tamer worthy of the Arena!'],

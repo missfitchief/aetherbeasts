@@ -41,7 +41,7 @@ const RAW: RawSpecies[] = [
   {
     id: 'drachnid', name: 'Drachnid', types: ['fire'], weights: [200, 10, 5, 11, 20, 15, 7],
     expGroup: 'mid', rarity: 'rare',
-    learn: [[1, 'tackle'], [1, 'unnerve'], [1, 'fireweb'], [15, 'fireball'], [25, 'magictrance']],
+    learn: [[1, 'tackle'], [1, 'unnerve'], [1, 'fireweb'], [12, 'fireball'], [25, 'magictrance']],
     evo: [evo(16, 'charachne')],
     desc: 'A chimaera bred from spider and dragon DNA. Known since long before biotechnology — perhaps the work of alchemy, unless the rumors are just rumors.',
   },
@@ -55,7 +55,7 @@ const RAW: RawSpecies[] = [
   {
     id: 'plaugspout', name: 'Plaugspout', types: ['plant'], weights: [200, 16, 10, 14, 8, 15, 1],
     expGroup: 'mid', rarity: 'rare',
-    learn: [[1, 'tackle'], [1, 'poisonspore'], [1, 'leafshot'], [15, 'leafexplosion'], [25, 'mushroommissile']],
+    learn: [[1, 'tackle'], [1, 'poisonspore'], [1, 'leafshot'], [12, 'leafexplosion'], [25, 'mushroommissile']],
     evo: [evo(16, 'flowrath')],
     desc: 'Its sap is highly poisonous, owing to the amanita mushrooms growing on its surface. This protects it from predators, but it remains paranoid and cautious.',
   },
@@ -69,7 +69,7 @@ const RAW: RawSpecies[] = [
   {
     id: 'draquatic', name: 'Draquatic', types: ['water'], weights: [200, 10, 11, 10, 8, 10, 12],
     expGroup: 'mid', rarity: 'rare',
-    learn: [[1, 'tackle'], [1, 'diverge'], [1, 'boombubble'], [15, 'whirlcutter'], [25, 'bite']],
+    learn: [[1, 'tackle'], [1, 'diverge'], [1, 'boombubble'], [12, 'whirlcutter'], [25, 'bite']],
     evo: [evo(16, 'leviocean')],
     desc: 'It lives deep underwater, hiding in shadow to ambush prey. Brought to the surface it grows disoriented — but many find its clumsiness endearing.',
   },

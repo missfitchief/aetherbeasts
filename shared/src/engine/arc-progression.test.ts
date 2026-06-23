@@ -29,4 +29,15 @@ describe('content-arc EXP curve', () => {
       expect(pendingEvolution(mon(id, 16, 7))).not.toBeNull();
     }
   });
+
+  // Regression guard for the Boss-1 wall: a starter must KNOW its strong STAB move
+  // by the level it reaches the Warden (~Lv12), not have it gated until after.
+  it('each starter has its tier-2 STAB move by ~Lv12 (Boss 1 entry)', () => {
+    const tier2: Record<string, string> = {
+      drachnid: 'fireball', draquatic: 'whirlcutter', plaugspout: 'leafexplosion',
+    };
+    for (const [id, move] of Object.entries(tier2)) {
+      expect(mon(id, 12, 9).moves).toContain(move);
+    }
+  });
 });

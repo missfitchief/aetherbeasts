@@ -17,6 +17,7 @@ export const ENCOUNTER_ZONES: Record<string, EncounterZone> = {
       { species: 'duvan', weight: 25 },
       { species: 'moldole', weight: 20 },
       { species: 'jestar', weight: 13 },
+      { species: 'drachnid', weight: 9 }, // a rare fire beast — gives off-type starters a plant answer for the Warden
       { species: 'spookshroom', weight: 8 },
       { species: 'draquatic', weight: 4 },
     ],
