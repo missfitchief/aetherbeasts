@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
-import type { SaveData, PublicProfile } from '@aether/shared';
-import { STARTING_CREDITS } from '@aether/shared';
+import type { SaveData, PublicProfile, QuestState } from '@aether/shared';
+import { STARTING_CREDITS, freshQuestState, rollOver } from '@aether/shared';
 import { DATABASE_URL } from './config.js';
 
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // resume tokens expire after 30 days (sliding)
@@ -25,6 +25,7 @@ export interface PlayerRecord {
   losses: number;
   lastDailyTopUp: number;
   tokenExpiresAt: number; // resume token absolute expiry (sliding on each auth)
+  quests: QuestState;     // server-authoritative daily/weekly quests + Season Points
   createdAt: number;
   updatedAt: number;
 }
@@ -142,6 +143,7 @@ export class Store {
       losses: 0,
       lastDailyTopUp: 0,
       tokenExpiresAt: Date.now() + TOKEN_TTL_MS,
+      quests: freshQuestState(id, Date.now()),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -186,6 +188,7 @@ export class Store {
       losses: 0,
       lastDailyTopUp: 0,
       tokenExpiresAt: Date.now() + TOKEN_TTL_MS,
+      quests: freshQuestState(id, Date.now()),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -223,6 +226,24 @@ export class Store {
     if (this.usedSigs.has(sig)) return false;
     this.usedSigs.add(sig);
     return true;
+  }
+
+  // --- quests (server-authoritative) -----------------------------------------
+  /** Quest state for a player, lazily initialized + rolled over to `now`.
+   *  Persists when a daily/weekly period actually rolled over. */
+  getQuests(id: string, now: number): QuestState | null {
+    const rec = this.byId.get(id);
+    if (!rec) return null;
+    if (!rec.quests) rec.quests = freshQuestState(id, now);
+    const before = `${rec.quests.daily.date}|${rec.quests.weekly.weekStart}`;
+    rollOver(rec.quests, id, now);
+    if (`${rec.quests.daily.date}|${rec.quests.weekly.weekStart}` !== before) this.queuePersist(rec);
+    return rec.quests;
+  }
+  /** Persist after a quest mutation (progress/claim). */
+  saveQuests(id: string): void {
+    const rec = this.byId.get(id);
+    if (rec) this.queuePersist(rec);
   }
 
   // --- authoritative wager-currency mutations (server-only) ------------------
@@ -269,6 +290,15 @@ export class Store {
       .sort((a, b) => b.rating - a.rating)
       .slice(0, limit)
       .map((r) => ({ name: r.name, rating: r.rating, wins: r.wins, losses: r.losses }));
+  }
+
+  /** Top players by Season Points — the basis for a future discretionary airdrop. */
+  seasonLeaderboard(limit = 50) {
+    return [...this.byId.values()]
+      .filter((r) => (r.quests?.seasonPoints ?? 0) > 0)
+      .sort((a, b) => (b.quests?.seasonPoints ?? 0) - (a.quests?.seasonPoints ?? 0))
+      .slice(0, limit)
+      .map((r) => ({ name: r.name, wallet: r.wallet, seasonPoints: r.quests?.seasonPoints ?? 0 }));
   }
 }
 

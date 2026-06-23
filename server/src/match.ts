@@ -23,6 +23,8 @@ import {
   TURN_TIMEOUT_MS,
   RECONNECT_GRACE_MS,
   DAILY_CREDIT_FLOOR,
+  applyProgress,
+  toQuestView,
 } from '@aether/shared';
 import { Store, publicProfile } from './store.js';
 
@@ -290,11 +292,24 @@ export class MatchManager {
     this.store.award(match.b.id, bGain);
     this.store.recordResult(match.a.id, aOut, aRD);
     this.store.recordResult(match.b.id, bOut, bRD);
+    this.bumpPvpWin(match.a, aOut);
+    this.bumpPvpWin(match.b, bOut);
 
     this.sendOver(match, match.a, aOut, aGain);
     this.sendOver(match, match.b, bOut, bGain);
 
     this.cleanup(match);
+  }
+
+  /** A PvP win authoritatively advances the player's pvp_win quests. */
+  private bumpPvpWin(ms: MatchSide, outcome: Outcome) {
+    if (outcome !== 'win') return;
+    const now = Date.now();
+    const qs = this.store.getQuests(ms.id, now);
+    if (qs && applyProgress(qs, 'pvp_win', 1)) {
+      this.store.saveQuests(ms.id);
+      if (ms.connected) this.emit(ms.socketId, 'quest:state', toQuestView(qs, now));
+    }
   }
 
   private sendOver(match: Match, ms: MatchSide, outcome: Outcome, gain: number) {

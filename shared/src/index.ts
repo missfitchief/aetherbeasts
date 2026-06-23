@@ -21,3 +21,4 @@ export * from './engine/battle.js';
 export * from './engine/save.js';
 export * from './engine/gacha.js';
 export * from './engine/wildspawn.js';
+export * from './engine/quests.js';

@@ -98,6 +98,31 @@ export interface AetherBalance {
   mint: string | null;
 }
 
+// ---- quests (read-only projection; server owns the authoritative state) -----
+export interface QuestViewItem {
+  id: string;
+  goal: string;
+  kind: 'daily' | 'weekly';
+  target: number;
+  progress: number;
+  claimed: boolean;
+  aether: number; // ◈ reward
+  points: number; // Season Points reward
+}
+
+export interface QuestView {
+  daily: QuestViewItem[];
+  weekly: QuestViewItem[];
+  streak: number;
+  seasonPoints: number;
+  dailyResetsInMs: number;
+  weeklyResetsInMs: number;
+}
+
+/** Client-reported progress for PvE actions. Bounded by each quest's target on the
+ *  server, so spoofing saves at most one quest's ◈ (never unlimited / cashable). */
+export type QuestProgressEvent = 'battle_play' | 'battle_win' | 'catch' | 'summon' | 'evolve';
+
 // ---- event maps (documentation + light typing aid) -------------------------
 export interface ServerToClient {
   'auth:ok': (p: AuthOk) => void;
@@ -119,6 +144,9 @@ export interface ServerToClient {
   'summon:quote': (p: AetherSummonQuote) => void;
   'summon:result': (p: { report: SummonReport; save: SaveData; txSig: string }) => void;
   'summon:error': (p: { message: string }) => void;
+  // Quests: the authoritative view, and the result of a claim (with the updated save).
+  'quest:state': (p: QuestView) => void;
+  'quest:claimed': (p: { questId: string; aether: number; points: number; streakBonus: number; save: SaveData; view: QuestView }) => void;
   'error': (p: { message: string }) => void;
 }
 
@@ -152,4 +180,10 @@ export interface ClientToServer {
   /** Premium gacha paid on-chain: the quote being paid + the confirmed
    *  $AETHER-transfer signature; the server verifies both before granting. */
   'summon:onchain': (p: { quoteId: string; txSig: string }) => void;
+  /** Report a PvE action toward quests (server clamps to quest targets). */
+  'quest:progress': (p: { type: QuestProgressEvent; amount?: number }) => void;
+  /** Claim a completed quest's reward. */
+  'quest:claim': (p: { questId: string }) => void;
+  /** Ask the server for the current quest board (e.g. when opening the panel). */
+  'quest:request': () => void;
 }

@@ -6,7 +6,7 @@ import {
 } from '@aether/shared';
 import { useGame } from '../../state/store.js';
 import { useNet } from '../../net/net.js';
-import { premiumSummon } from '../../net/net.js';
+import { premiumSummon, emitQuestProgress } from '../../net/net.js';
 import { audio } from '../../game/audio.js';
 import { Modal } from '../Panels.js';
 import { MonImg } from '../components.js';
@@ -54,6 +54,7 @@ export function SummonPanel() {
       showToast('Not enough $AETHER.');
       return;
     }
+    emitQuestProgress('summon'); // toward the daily "Summon once" quest
     setReport(r); // the reveal sequence (portal → cards) owns the audio
   };
 

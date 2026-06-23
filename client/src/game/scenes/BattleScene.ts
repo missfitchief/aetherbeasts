@@ -6,6 +6,7 @@ import {
   type Creature, type BattleState, type BattleEvent, type PlayerAction, type Side,
 } from '@aether/shared';
 import { useGame } from '../../state/store.js';
+import { emitQuestProgress } from '../../net/net.js';
 import { audio } from '../audio.js';
 
 const W = 640;
@@ -486,11 +487,18 @@ export class BattleScene extends Phaser.Scene {
         s.dex[e.into].seen = true;
       });
       await this.say(`${fromName} evolved into ${getSpecies(e.into).name}!`);
+      emitQuestProgress('evolve');
     }
   }
 
   private async finish(): Promise<void> {
     if (this.state.outcome === 'win') audio.sfx('jingle_win', 0.6);
+    // Quest progress (PvE). The server clamps each to its quest target.
+    if (!this.state.isPvp) {
+      emitQuestProgress('battle_play');
+      if (this.state.outcome === 'win') emitQuestProgress('battle_win');
+      if (this.state.outcome === 'caught') emitQuestProgress('catch');
+    }
     await this.wait(300);
     this.cameras.main.fadeOut(220);
     await this.wait(240);

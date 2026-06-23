@@ -398,6 +398,30 @@ html, body, #root {
 }
 .rift-premium .premium-status { color: #ffcf5c; font-weight: 600; }
 
+/* --- quests --- */
+.quests { display: flex; flex-direction: column; gap: 14px; }
+.quest-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.quest-streak { font-weight: 700; color: #ff9d5c; }
+.quest-points { font-weight: 700; color: #ffcf5c; }
+.quest-section { display: flex; flex-direction: column; gap: 8px; }
+.quest-section-head { display: flex; justify-content: space-between; align-items: baseline; }
+.quest-section-head h3 { margin: 0; font-size: 15px; }
+.quest-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.quest-row.ready { border-color: rgba(123, 216, 143, 0.6); box-shadow: 0 0 10px rgba(123, 216, 143, 0.22); }
+.quest-row.claimed { opacity: 0.5; }
+.quest-info { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.quest-goal { font-weight: 600; }
+.quest-bar { height: 6px; border-radius: 4px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.quest-bar-fill { height: 100%; background: linear-gradient(90deg, #7bd88f, #5cc6ff); transition: width 0.3s; }
+.quest-action { min-width: 64px; text-align: right; }
+.quest-check { color: #7bd88f; font-weight: 700; font-size: 18px; }
+.btn.small { padding: 5px 12px; font-size: 13px; }
+.quest-foot { padding-top: 6px; border-top: 1px dashed rgba(255, 207, 92, 0.3); }
+
 /* reveal overlay */
 .reveal-overlay {
   position: fixed; inset: 0; z-index: 60;

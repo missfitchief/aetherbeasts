@@ -1,8 +1,8 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { Server, type Socket } from 'socket.io';
-import type { SaveData, PlayerAction, SummonReport } from '@aether/shared';
-import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng } from '@aether/shared';
+import type { SaveData, PlayerAction, SummonReport, QuestProgressType } from '@aether/shared';
+import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, toQuestView } from '@aether/shared';
 import { PORT, corsOrigin, TREASURY_ADDRESS, AETHER_MINT, AETHER_DECIMALS, QUOTE_TTL_MS, ONCHAIN_SUMMON_ENABLED, validateConfig } from './config.js';
 import { Store, publicProfile, type PlayerRecord } from './store.js';
 import { buildLoginMessage, verifySignature } from './auth.js';
@@ -63,8 +63,17 @@ function authOk(socket: Socket, rec: PlayerRecord) {
     bind(socket);
     bound.add(socket.id);
   }
+  emitQuests(socket, fresh.id); // send the current daily/weekly board on login
   // If this player had a live match (reconnect), rejoin and resync.
   matches.resume(fresh.id, socket.id);
+}
+
+const VALID_PROGRESS = new Set(['battle_play', 'battle_win', 'catch', 'summon', 'evolve']);
+
+function emitQuests(socket: Socket, playerId: string) {
+  const now = Date.now();
+  const qs = store.getQuests(playerId, now);
+  if (qs) socket.emit('quest:state', toQuestView(qs, now));
 }
 
 // Handlers are bound ONCE per socket but the session's playerId can change (a
@@ -196,6 +205,47 @@ function bind(socket: Socket) {
     } catch {
       socket.emit('summon:error', { message: 'Summon could not be completed.' });
     }
+  });
+
+  socket.on('quest:request', () => {
+    const id = pid();
+    if (id) emitQuests(socket, id);
+  });
+
+  // Report a PvE action toward quests. The engine clamps to each quest's target,
+  // so a spoofed event is worth at most one quest's ◈ (non-cashable, closed-loop).
+  socket.on('quest:progress', (p: { type: string; amount?: number }) => {
+    const id = pid();
+    if (!id || !p || !VALID_PROGRESS.has(p.type)) return;
+    const now = Date.now();
+    const qs = store.getQuests(id, now);
+    if (!qs) return;
+    const amount = Math.max(1, Math.min(10, Math.floor(Number(p.amount) || 1)));
+    if (applyProgress(qs, p.type as QuestProgressType, amount)) {
+      store.saveQuests(id);
+      socket.emit('quest:state', toQuestView(qs, now));
+    }
+  });
+
+  // Claim a completed quest: grant ◈ into the save (server-authoritative) + Season Points.
+  socket.on('quest:claim', (p: { questId: string }) => {
+    const id = pid();
+    if (!id || !p || typeof p.questId !== 'string') return;
+    const rec = store.getById(id);
+    if (!rec) return;
+    const now = Date.now();
+    const qs = store.getQuests(id, now);
+    if (!qs) return;
+    if (!rec.save) return socket.emit('error', { message: 'Start the game before claiming quests.' });
+    const result = claimQuest(qs, p.questId, now);
+    if (!result) return; // not complete / already claimed / unknown
+    rec.save.aether = (rec.save.aether ?? 0) + result.aether;
+    rec.save.updatedAt = Math.max((rec.save.updatedAt ?? 0) + 1, now); // server-authored save wins
+    store.saveProgress(id, rec.save); // persists the record (save + quests together)
+    socket.emit('quest:claimed', {
+      questId: p.questId, aether: result.aether, points: result.points, streakBonus: result.streakBonus,
+      save: rec.save, view: toQuestView(qs, now),
+    });
   });
 
   socket.on('disconnect', () => {

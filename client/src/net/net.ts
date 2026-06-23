@@ -11,6 +11,8 @@ import type {
   SaveData,
   AetherSummonQuote,
   SummonReport,
+  QuestView,
+  QuestProgressEvent,
 } from '@aether/shared';
 import { DEFAULT_STAKE } from '@aether/shared';
 import { useGame } from '../state/store.js';
@@ -58,6 +60,8 @@ interface NetState {
   summonPhase: 'idle' | 'quoting' | 'signing' | 'verifying';
   /** The result of a completed premium summon, for the reveal animation. */
   summonReport: SummonReport | null;
+  /** Authoritative daily/weekly quest board (null until the server sends it). */
+  questView: QuestView | null;
   setArena: (open: boolean) => void;
   setStake: (n: number) => void;
   clearSummonReport: () => void;
@@ -83,6 +87,7 @@ export const useNet = create<NetState>((set) => ({
   note: null,
   summonPhase: 'idle',
   summonReport: null,
+  questView: null,
   setArena: (open) => set({ arenaOpen: open }),
   setStake: (n) => set({ stake: n }),
   clearSummonReport: () => set({ summonReport: null }),
@@ -139,7 +144,7 @@ export function startNet() {
   window.addEventListener('pagehide', flushSave);
   if (import.meta.env.DEV) {
     (window as unknown as { __net: unknown }).__net = {
-      useNet, findMatch, cancelMatch, submitMove, submitSwitch, forfeitMatch, connectWallet, refreshBalance, leaveResult, premiumSummon,
+      useNet, findMatch, cancelMatch, submitMove, submitSwitch, forfeitMatch, connectWallet, refreshBalance, leaveResult, premiumSummon, emitQuestProgress, claimQuest,
     };
   }
 }
@@ -290,6 +295,7 @@ function wire(s: Socket) {
     useGame.getState().hydrateSave(p.save);
     localSaveAdapter.save(p.save);
     useNet.setState({ summonPhase: 'idle', summonReport: p.report });
+    emitQuestProgress('summon'); // a premium pull also counts toward the summon quest
     s.emit('balance:get', {}); // wallet balance dropped — refresh the HUD
   });
 
@@ -297,6 +303,17 @@ function wire(s: Socket) {
     clearPendingSummon();
     useNet.setState({ summonPhase: 'idle' });
     toast(p.message);
+  });
+
+  // Quests: the authoritative board, and a claim's reward.
+  s.on('quest:state', (v: QuestView) => useNet.setState({ questView: v }));
+  s.on('quest:claimed', (p: { questId: string; aether: number; points: number; streakBonus: number; save: SaveData; view: QuestView }) => {
+    // Apply the ◈ reward as a delta (the server already persisted it) so we never
+    // clobber unsaved mid-session state like the player's position.
+    useGame.getState().addAether(p.aether);
+    useNet.setState({ questView: p.view });
+    const bonus = p.streakBonus > 0 ? ` (+${p.streakBonus} streak)` : '';
+    toast(`Quest complete! +${p.aether} ◈${bonus}`);
   });
 }
 
@@ -396,6 +413,19 @@ export function forfeitMatch() {
 
 export function leaveResult() {
   useNet.setState({ lobby: 'idle', view: null, result: null, log: [], note: null });
+}
+
+/** Report a PvE action toward quests (server clamps to each quest's target). */
+export function emitQuestProgress(type: QuestProgressEvent, amount = 1) {
+  if (socket?.connected) socket.emit('quest:progress', { type, amount });
+}
+/** Claim a completed quest's reward. */
+export function claimQuest(questId: string) {
+  if (socket?.connected) socket.emit('quest:claim', { questId });
+}
+/** Ask the server for the current quest board (e.g. on opening the panel). */
+export function refreshQuests() {
+  if (socket?.connected) socket.emit('quest:request');
 }
 
 let summonWatchdog: ReturnType<typeof setTimeout> | null = null;
