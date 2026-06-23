@@ -59,7 +59,12 @@ export class Store {
       console.log('[store] in-memory mode (no DATABASE_URL set)');
       return;
     }
-    this.pool = new Pool({ connectionString: DATABASE_URL });
+    // Hosted Postgres (Neon/Supabase/Render) requires SSL; local does not.
+    const local = /localhost|127\.0\.0\.1/.test(DATABASE_URL);
+    this.pool = new Pool({
+      connectionString: DATABASE_URL,
+      ssl: local ? false : { rejectUnauthorized: false },
+    });
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS players (
         id text PRIMARY KEY,

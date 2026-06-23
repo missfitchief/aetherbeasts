@@ -39,12 +39,14 @@ services:
       #   value: "0.00005"   # set near your launch price
       # - key: SOLANA_RPC
       #   value: "<a paid mainnet RPC — Helius/QuickNode>"
-      # - key: DATABASE_URL    # optional Postgres for durable accounts
-      #   fromDatabase:
-      #     name: aetherbeasts-db
-      #     property: connectionString
+      # IMPORTANT: without this, accounts/saves live only in memory and are LOST on
+      # every restart, redeploy, or free-tier sleep. Set the value in the Render
+      # dashboard to a Postgres connection string — a FREE Neon (neon.tech) or
+      # Supabase database works and needs no card. The server auto-creates its tables.
+      - key: DATABASE_URL
+        sync: false # set the secret value in the Render dashboard, not in this file
 
-# Optional managed Postgres (uncomment + the DATABASE_URL above to persist accounts):
+# Alternatively, let Render provision a managed Postgres (may require billing):
 # databases:
 #   - name: aetherbeasts-db
-#     plan: starter
+#     plan: free
