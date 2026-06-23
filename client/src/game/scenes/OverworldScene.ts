@@ -627,6 +627,14 @@ export class OverworldScene extends Phaser.Scene {
         : [`${trainer.name}: Good to see you again, tamer!`]);
       return;
     }
+    // The Champion only accepts a challenge once the three Elites are beaten.
+    if (trainerId === 'boss_champion') {
+      const elites = ['e_league_1', 'e_league_2', 'e_league_3'];
+      if (!elites.every((e) => isTrainerDefeated(save, e))) {
+        useDialogue(['The Champion will not yet see you.', 'Defeat all three Elites first.']);
+        return;
+      }
+    }
     // Play the intro lines, then drop into the trainer battle.
     useDialogue(trainer.intro, () => this.startTrainerEncounter(trainer));
   }
@@ -657,7 +665,9 @@ export class OverworldScene extends Phaser.Scene {
       if (trainer.badge) {
         awardBadge(save, trainer.badge);
         if (trainer.badge === 'ember') {
-          lines.push('With both badges earned, you are Arena-ready! Tap the ⚔ Arena icon to battle other tamers.');
+          lines.push('The Aether League gate at the head of town is open — challenge the Elites and the Champion!');
+        } else if (trainer.badge === 'champion') {
+          lines.push('🏆 You are the AETHER CHAMPION! Now test your might against real tamers in the PvP Arena (⚔).');
         }
       }
       game.persist();

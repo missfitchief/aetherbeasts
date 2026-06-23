@@ -241,6 +241,13 @@ export function buildWorld(): WorldMap {
   obj('lamp', 20, 6); obj('lamp', 20, 21);
   obj('sign', 20, 22);
   obj('shrine', 25, 16); // the Daily Champion's altar, just off the spawn
+  // The Aether League gate at the head of the avenue, unlocked by the Ember Badge.
+  obj('portal', 22, 2);
+  warps.push({
+    x: 22, y: 2, toMap: 'aetherleague', toX: 12, toY: 18, facing: 'down',
+    requiresBadge: 'ember',
+    lockedText: ['The Aether League gate hums with sealed power.', 'Earn the Ember Badge in Emberhollow to enter.'],
+  });
   // a ragged forest edge frames the south of town, funnelling you down the avenue
   treeEdge(2, 18, 23); treeEdge(25, 43, 23);
   pineAt(19, 6); pineAt(25, 6);   // specimen conifers flanking the avenue head
@@ -457,12 +464,61 @@ function buildEmberhollow(): WorldMap {
   };
 }
 
+// ===========================================================================
+// The Aether League — a grand hall (the post-game gauntlet), unlocked by the
+// Ember Badge. Three Elites flank a carpet aisle; the Champion holds the throne.
+// ===========================================================================
+function buildAetherLeague(): WorldMap {
+  const W = 24, H = 22;
+  const tiles: Tile[][] = [];
+  const solid: boolean[][] = [];
+  for (let y = 0; y < H; y++) {
+    tiles.push(Array.from({ length: W }, () => ({ type: 'floor' as TerrainType })));
+    solid.push(Array.from({ length: W }, () => false));
+  }
+  const set = (x: number, y: number, t: TerrainType) => { if (x >= 0 && x < W && y >= 0 && y < H) tiles[y][x] = { type: t }; };
+  for (let x = 0; x < W; x++) { set(x, 0, 'wall'); set(x, H - 1, 'wall'); solid[0][x] = solid[H - 1][x] = true; }
+  for (let y = 0; y < H; y++) { set(0, y, 'wall'); set(W - 1, y, 'wall'); solid[y][0] = solid[y][W - 1] = true; }
+  for (let y = 2; y <= H - 2; y++) set(12, y, 'carpet'); // grand aisle to the throne
+
+  const objects: WorldObject[] = [];
+  const obj = (kind: ObjKind, x: number, y: number) => {
+    objects.push({ kind, x, y });
+    const d = OBJ_DEF[kind];
+    if (d.solid) {
+      const half = (d.fw - 1) / 2;
+      for (let yy = y - d.fh + 1; yy <= y; yy++)
+        for (let xx = x - half; xx <= x + half; xx++)
+          if (xx >= 0 && xx < W && yy >= 0 && yy < H) solid[yy][xx] = true;
+    }
+  };
+  obj('candle', 9, 4); obj('candle', 15, 4);
+  obj('pew', 5, 9); obj('pew', 19, 9); obj('pew', 5, 13); obj('pew', 19, 13);
+  obj('shrine', 9, 18); // heal between bouts
+
+  const npcs: Npc[] = [
+    { id: 'np_e1', kind: 'trainer', x: 8, y: 12, facing: 'right', sheet: 'sheet_guy', trainerId: 'e_league_1' },
+    { id: 'np_e2', kind: 'trainer', x: 16, y: 12, facing: 'left', sheet: 'sheet_hiker', trainerId: 'e_league_2' },
+    { id: 'np_e3', kind: 'trainer', x: 8, y: 7, facing: 'right', sheet: 'sheet_schoolgirl', trainerId: 'e_league_3' },
+    { id: 'np_champ', kind: 'trainer', x: 12, y: 4, facing: 'down', sheet: 'sheet_professor', trainerId: 'boss_champion' },
+  ];
+  const interactables: Interactable[] = [{ kind: 'shrine', x: 9, y: 18 }];
+  const warps: Warp[] = [{ x: 12, y: 20, toMap: 'world', toX: 22, toY: 3, facing: 'down' }];
+
+  return {
+    id: 'aetherleague', kind: 'overworld', width: W, height: H, tiles, solid,
+    objects, npcs, interactables, warps, spawn: { x: 12, y: 18 }, bg: 0x140e22,
+  };
+}
+
 let overworldCache: WorldMap | null = null;
 let emberhollowCache: WorldMap | null = null;
-/** Resolve a map by id ('world' = overworld, 'emberhollow' = the cave, else a building interior). */
+let aetherLeagueCache: WorldMap | null = null;
+/** Resolve a map by id ('world', 'emberhollow', 'aetherleague', else a building interior). */
 export function getMap(id: string): WorldMap {
   if (id === 'world') return (overworldCache ??= buildWorld());
   if (id === 'emberhollow') return (emberhollowCache ??= buildEmberhollow());
+  if (id === 'aetherleague') return (aetherLeagueCache ??= buildAetherLeague());
   const b = BUILDINGS.find((x) => x.interiorId === id);
   if (!b) throw new Error(`Unknown map: ${id}`);
   return buildInterior(b);

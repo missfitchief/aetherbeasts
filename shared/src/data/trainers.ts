@@ -19,7 +19,7 @@ export interface Trainer {
   id: string;
   name: string;
   kind: 'trainer' | 'boss';
-  zone: 'whisperwood' | 'emberhollow';
+  zone: 'whisperwood' | 'emberhollow' | 'aetherleague';
   team: TrainerMon[];
   /** Aether (◈) awarded on victory. */
   moneyReward: number;
@@ -93,8 +93,41 @@ export const TRAINERS: Trainer[] = [
       { species: 'wraithmanita', level: 23 }, { species: 'charachne', level: 24 },
     ],
     moneyReward: 550, badge: 'ember',
-    intro: ['Few reach my magma throne. Fewer leave with the Ember Badge.', 'Show me a tamer worthy of the Arena!'],
-    defeat: ['The Ember Badge is yours, champion of Emberhollow.', "You've outgrown these caves - the Aether Arena is where legends are forged now. Go."],
+    intro: ['Few reach my magma throne. Fewer leave with the Ember Badge.', 'Show me a tamer worthy of the League!'],
+    defeat: ['The Ember Badge is yours, champion of Emberhollow.', "You've outgrown these caves - the Aether League awaits at the top of town. Go."],
+  },
+
+  // --- The Aether League: a post-game gauntlet gated by the Ember Badge ------
+  {
+    id: 'e_league_1', name: 'Elite Sol', kind: 'trainer', zone: 'aetherleague',
+    team: [{ species: 'ratssive', level: 32 }, { species: 'charachne', level: 34 }],
+    moneyReward: 600,
+    intro: ['I am Sol, first of the Elites. Show me your fire.'],
+    defeat: ['Bright indeed. Pass - the others await.'],
+  },
+  {
+    id: 'e_league_2', name: 'Elite Mara', kind: 'trainer', zone: 'aetherleague',
+    team: [{ species: 'pidgreat', level: 33 }, { species: 'leviocean', level: 35 }],
+    moneyReward: 700,
+    intro: ['Mara of the tides. Sink or swim, challenger.'],
+    defeat: ['The current favors you today.'],
+  },
+  {
+    id: 'e_league_3', name: 'Elite Korr', kind: 'trainer', zone: 'aetherleague',
+    team: [{ species: 'shroomole', level: 34 }, { species: 'wraithmanita', level: 35 }, { species: 'flowrath', level: 36 }],
+    moneyReward: 800,
+    intro: ['Korr. The deep roots remember every challenger. Will they remember you?'],
+    defeat: ['Rooted strength meets a stronger will. Go - the Champion waits.'],
+  },
+  {
+    id: 'boss_champion', name: 'Champion Wren', kind: 'boss', zone: 'aetherleague',
+    team: [
+      { species: 'pidgreat', level: 38 }, { species: 'cardemon', level: 39 },
+      { species: 'wraithmanita', level: 40 }, { species: 'leviocean', level: 40 }, { species: 'charachne', level: 42 },
+    ],
+    moneyReward: 2000, badge: 'champion',
+    intro: ['So my finest student reaches my throne at last.', 'Professor no more - here, I am the Champion. Give me everything!'],
+    defeat: ['...Magnificent. The title is yours.', 'You are the Aether Champion! Now prove it against real tamers in the Arena.'],
   },
 ];
 

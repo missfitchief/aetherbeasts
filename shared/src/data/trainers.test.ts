@@ -4,13 +4,13 @@ import { getSpecies } from './species.js';
 import { MAX_MOVES } from '../constants.js';
 
 describe('trainer catalog', () => {
-  it('has 6 trainers + 2 bosses; only bosses carry a badge', () => {
-    expect(TRAINERS.filter((t) => t.kind === 'trainer')).toHaveLength(6);
+  it('has 9 trainers + 3 bosses; only bosses carry a badge', () => {
+    expect(TRAINERS.filter((t) => t.kind === 'trainer')).toHaveLength(9);
     const bosses = TRAINERS.filter((t) => t.kind === 'boss');
-    expect(bosses).toHaveLength(2);
+    expect(bosses).toHaveLength(3);
     expect(bosses.every((b) => !!b.badge)).toBe(true);
     expect(TRAINERS.filter((t) => t.kind === 'trainer').every((t) => !t.badge)).toBe(true);
-    expect(bosses.map((b) => b.badge).sort()).toEqual(['ember', 'verdant']);
+    expect(bosses.map((b) => b.badge).sort()).toEqual(['champion', 'ember', 'verdant']);
   });
 
   it('all teams reference real species, valid levels, and <= MAX_MOVES', () => {
@@ -25,11 +25,11 @@ describe('trainer catalog', () => {
     }
   });
 
-  it('boss teams are 3-4 mons; trainer teams 2-3', () => {
+  it('boss teams are 3-6 mons; trainer teams 2-3', () => {
     for (const t of TRAINERS) {
       if (t.kind === 'boss') {
         expect(t.team.length).toBeGreaterThanOrEqual(3);
-        expect(t.team.length).toBeLessThanOrEqual(4);
+        expect(t.team.length).toBeLessThanOrEqual(6);
       } else {
         expect(t.team.length).toBeLessThanOrEqual(3);
       }

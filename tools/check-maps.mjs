@@ -44,7 +44,7 @@ function check(id) {
 }
 
 let bad = 0;
-for (const id of ['world', 'emberhollow']) {
+for (const id of ['world', 'emberhollow', 'aetherleague']) {
   const e = check(id);
   if (e.length) { bad++; console.log(`${id}: FAIL\n  - ${e.join('\n  - ')}`); }
   else console.log(`${id}: OK`);
