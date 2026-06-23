@@ -42,4 +42,18 @@ for (const id of ['world', 'emberhollow']) {
   if (e.length) { bad++; console.log(`${id}: FAIL\n  - ${e.join('\n  - ')}`); }
   else console.log(`${id}: OK`);
 }
+
+// Portal placement + tree-clearing around the Emberhollow gate (south end of world).
+{
+  const w = getMap('world');
+  const treeKinds = new Set(['tree', 'tree2', 'tree3', 'pine']);
+  const portal = w.objects.find((o) => o.kind === 'portal');
+  const treesInPocket = w.objects.filter(
+    (o) => treeKinds.has(o.kind) && o.x >= 19 && o.x <= 26 && o.y >= 53 && o.y <= 57,
+  );
+  console.log(`portal: ${portal ? `${portal.x},${portal.y}` : 'MISSING'}  (map bottom row = ${w.height - 1})`);
+  console.log(`trees in gate pocket (x19-26,y53-57): ${treesInPocket.length}`);
+  if (!portal) bad++;
+  if (treesInPocket.length) bad++;
+}
 process.exit(bad ? 1 : 0);

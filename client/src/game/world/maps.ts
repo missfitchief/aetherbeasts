@@ -253,13 +253,17 @@ export function buildWorld(): WorldMap {
   rect(26, 42, 15, 7, 'tallgrass', 'whisperwood_deep');
   rect(2, 50, W - 4, 4, 'tallgrass', 'whisperwood_deep');
   rect(22, 50, 2, 4, 'path');
-  // The badge-gated descent into Emberhollow Cave at the south end of the path.
-  warps.push({
-    x: 22, y: 53, toMap: 'emberhollow', toX: 14, toY: 3, facing: 'down',
-    requiresBadge: 'verdant',
-    lockedText: ['A shimmering heat-haze seals the cave mouth to the south.', 'Best the Warden of Whisperwood for the Verdant Badge to pass.'],
-  });
-  obj('portal', 22, 53); // the visible Emberhollow gate, sitting on the warp tile
+  // The badge-gated Emberhollow gate — a portal at the very SOUTH END of the
+  // avenue, in a cleared, paved pocket so the road visibly terminates at it.
+  // Hold the forest back from this pocket (mark the tiles as "treed" so neither
+  // the border nor the clusters drop a canopy here).
+  for (let yy = 53; yy <= H - 1; yy++) for (let xx = 19; xx <= 26; xx++) treeSet.add(tkey(xx, yy));
+  rect(20, 54, 6, 3, 'path'); // a small stone plaza at the road's end
+  const emberLock = ['A shimmering heat-haze seals the cave mouth.', 'Best the Warden of Whisperwood for the Verdant Badge to pass.'];
+  for (const wx of [22, 23]) {
+    warps.push({ x: wx, y: 56, toMap: 'emberhollow', toX: 14, toY: 3, facing: 'down', requiresBadge: 'verdant', lockedText: emberLock });
+  }
+  obj('portal', 22, 56); // the visible gate at the map's south end
   // one large scenic pond (replaces the scattered small ponds), left of the path
   pond(12, 44, 8, 5);
   // tree clusters framing the route (kept clear of the pond + central path)
