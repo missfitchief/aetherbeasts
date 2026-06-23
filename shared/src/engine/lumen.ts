@@ -1,0 +1,137 @@
+/**
+ * LUMEN — the scarce, cashable in-game token, and the math behind the Aether
+ * Exchange (LUMEN -> on-chain $AETHER converter).
+ *
+ * Design goals (see docs/superpowers/specs economy design):
+ *  - LUMEN is EARNED only from a small, capped set of skill/retention gates — never
+ *    from the high-velocity GLINT grind. Its emission is structurally bounded
+ *    (~<=12/day/account) so no amount of botting raises the ceiling.
+ *  - The Exchange pays out $AETHER ONLY from a Rewards Pool funded by a fixed cut
+ *    of real premium-pull revenue (+ optional disclosed dev seed). HARD INVARIANT:
+ *    cumulative_payout <= pool <= POOL_FUNDING_RATE * cumulative_revenue.
+ *    => the game can never pay out value players did not first put in. No mint,
+ *    no inflation, no fixed redemption promise => it cannot death-spiral.
+ *  - A dynamic burn-tax (tau) throttles outflow under stress; daily/weekly caps,
+ *    a min-hold, and an eligibility gate (must have paid in) block sybil farming.
+ *
+ * This module is PURE (no I/O, no clock) so every rule is unit-testable and both
+ * client and server agree. All $AETHER amounts are base units (bigint); LUMEN is a
+ * plain number (it is low-velocity and small).
+ */
+
+// ---- economic constants (tunable; mirror server config at launch) -----------
+export const LUMEN_PEG_USD = 0.01;        // reference value of 1 LUMEN, in USD
+export const POOL_FUNDING_RATE = 0.30;    // share of premium-pull revenue ring-fenced for payouts
+export const REDEEM_DAILY_CAP = 50;       // max LUMEN converted per account per UTC day
+export const REDEEM_WEEKLY_CAP = 250;     // ...per rolling/UTC week
+export const MIN_HOLD_DAYS = 7;           // a LUMEN lot must age this long before it can be redeemed
+export const TAU_FLOOR = 0.10;            // min conversion burn-tax
+export const TAU_MAX = 0.60;              // max conversion burn-tax (under pool stress)
+export const TAU_STRESS_FROM = 0.8;       // tau starts rising once rollingRatio passes this
+export const ELIGIBILITY_MIN_PURCHASES = 1;   // must have bought >=1 premium pull to ever cash out
+export const ELIGIBILITY_WALLET_AGE_DAYS = 30; // ...and the wallet must be at least this old
+
+/** LUMEN faucet base rates (Season 1, before the seasonal emission multiplier). */
+export const LUMEN_FAUCET = {
+  dailyQuestsCleared: 3,   // grant when all 3 dailies are claimed
+  weeklyQuestsCleared: 20, // grant when all weeklies are claimed
+  rankedWin: 0.5,          // per ranked PvP win (server-settled), capped below
+  rankedWinDailyCap: 10,   // at most 10 ranked wins/day count -> +5 LUMEN/day
+  dailyBoss: 2,            // defeat the daily boss
+  loginDay7: 5,            // the 7th login-calendar slot
+  seasonPointMilestone: 10, // per 500 Season Points, claim-once each
+  seasonPointStep: 500,
+} as const;
+
+/** LUMEN sink prices (give players in-game reasons to SPEND LUMEN, not just cash out). */
+export const LUMEN_SINK = {
+  awaken: [8, 20, 50, 120, 280] as const, // cost to awaken to star 1..5 (per beast)
+  guaranteedFiveStar: 150,
+  cosmeticMin: 30,
+  cosmeticMax: 100,
+  seasonPass: 250,
+} as const;
+
+/** Seasonal emission multiplier: halves each season, floored at 1/8. */
+export function emissionFactor(season: number): number {
+  return Math.max(0.125, Math.pow(0.5, Math.max(0, season - 1)));
+}
+
+/**
+ * Dynamic conversion burn-tax. `rollingRatio` R = (7-day redeemed value) / (pool
+ * daily budget). Comfortable (R <= 0.8) -> TAU_FLOOR; under stress it ramps toward
+ * TAU_MAX, throttling outflow and burning more LUMEN.
+ */
+export function tau(rollingRatio: number): number {
+  const t = TAU_FLOOR + 0.5 * Math.max(0, rollingRatio - TAU_STRESS_FROM);
+  return Math.min(TAU_MAX, Math.max(TAU_FLOOR, t));
+}
+
+/** The $AETHER (base units) that one verified pull adds to the Rewards Pool. */
+export function poolCreditFromRevenue(treasuryBaseUnits: bigint): bigint {
+  // floor(treasury * 30 / 100) — integer math, never over-credits.
+  return (treasuryBaseUnits * BigInt(Math.round(POOL_FUNDING_RATE * 100))) / 100n;
+}
+
+export interface RedeemInput {
+  lumenRequested: number;   // LUMEN the player wants to convert
+  aetherPriceUsd: number;   // live $ per $AETHER (caller floors this via the price feed)
+  aetherDecimals: number;   // token decimals (e.g. 6)
+  rollingRatio: number;     // R, for tau
+  dailyUsedLumen: number;   // LUMEN already redeemed today
+  weeklyUsedLumen: number;  // LUMEN already redeemed this week
+  poolBaseUnits: bigint;    // current Rewards Pool balance
+}
+
+export interface RedeemQuote {
+  ok: boolean;
+  reason?: 'cap' | 'pool_low' | 'bad_input';
+  acceptedLumen: number;    // after daily/weekly caps
+  burnedLumen: number;      // tau * accepted (a LUMEN sink)
+  netLumen: number;         // accepted - burned (the value actually converted)
+  tau: number;
+  aetherBaseUnits: bigint;  // payout, rounded DOWN, guaranteed <= poolBaseUnits
+}
+
+/**
+ * Compute a redemption quote. Applies caps -> burn-tax -> USD-peg conversion at the
+ * live price, rounds the payout DOWN (house never loses on rounding), and refuses
+ * if the pool can't cover it (circuit breaker). Pure: the server re-checks caps,
+ * eligibility, hold, and debits the pool atomically before paying.
+ */
+export function redeemQuote(input: RedeemInput): RedeemQuote {
+  const empty = { acceptedLumen: 0, burnedLumen: 0, netLumen: 0, tau: TAU_FLOOR, aetherBaseUnits: 0n };
+  if (
+    !(input.lumenRequested > 0) ||
+    !(input.aetherPriceUsd > 0) ||
+    !Number.isInteger(input.aetherDecimals) || input.aetherDecimals < 0 ||
+    input.poolBaseUnits < 0n
+  ) {
+    return { ok: false, reason: 'bad_input', ...empty };
+  }
+
+  const dailyRoom = Math.max(0, REDEEM_DAILY_CAP - input.dailyUsedLumen);
+  const weeklyRoom = Math.max(0, REDEEM_WEEKLY_CAP - input.weeklyUsedLumen);
+  const accepted = Math.min(input.lumenRequested, dailyRoom, weeklyRoom);
+  if (accepted <= 0) return { ok: false, reason: 'cap', ...empty };
+
+  const t = tau(input.rollingRatio);
+  const burned = accepted * t;
+  const net = accepted - burned;
+
+  // net LUMEN -> USD (peg) -> $AETHER -> base units, rounded DOWN.
+  const aetherWhole = (net * LUMEN_PEG_USD) / input.aetherPriceUsd;
+  const baseUnits = BigInt(Math.floor(aetherWhole * Math.pow(10, input.aetherDecimals)));
+
+  if (baseUnits <= 0n) return { ok: false, reason: 'cap', acceptedLumen: accepted, burnedLumen: burned, netLumen: net, tau: t, aetherBaseUnits: 0n };
+  if (baseUnits > input.poolBaseUnits) {
+    return { ok: false, reason: 'pool_low', acceptedLumen: accepted, burnedLumen: burned, netLumen: net, tau: t, aetherBaseUnits: 0n };
+  }
+
+  return { ok: true, acceptedLumen: accepted, burnedLumen: burned, netLumen: net, tau: t, aetherBaseUnits: baseUnits };
+}
+
+/** Whether a wallet may ever use the Exchange (rebate-on-real-spend gate). */
+export function isRedeemEligible(purchases: number, walletAgeDays: number): boolean {
+  return purchases >= ELIGIBILITY_MIN_PURCHASES && walletAgeDays >= ELIGIBILITY_WALLET_AGE_DAYS;
+}
