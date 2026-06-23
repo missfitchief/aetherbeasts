@@ -13,9 +13,14 @@ import { LoginGate } from './ui/LoginGate.js';
 import { startNet } from './net/net.js';
 import { useNet } from './net/net.js';
 
+// Show the quest board automatically ONCE per page session (a "login pop-up"),
+// not on every socket reconnect.
+let questPopupShown = false;
+
 export function App() {
   const screen = useGame((s) => s.screen);
   const wallet = useNet((s) => s.wallet); // null until signed in with a wallet
+  const questView = useNet((s) => s.questView);
 
   useEffect(() => {
     audio.init();
@@ -26,6 +31,19 @@ export function App() {
   useEffect(() => {
     if (!wallet || screen === 'title' || screen === 'starter') audio.playMusic('bgm_title', 0.4);
   }, [screen, wallet]);
+
+  // Pop the quest board on login, once it has arrived and the player is in-game.
+  useEffect(() => {
+    if (questPopupShown || screen !== 'playing' || !questView) return;
+    questPopupShown = true; // claim the one-shot regardless of the checks below
+    const hasUnclaimed = questView.daily.some((q) => !q.claimed) || questView.weekly.some((q) => !q.claimed);
+    if (!hasUnclaimed) return; // nothing to do today — don't nag
+    const t = setTimeout(() => {
+      const g = useGame.getState();
+      if (!g.panel && !g.dialogue) g.openPanel('quests'); // don't clobber a panel or the intro
+    }, 700);
+    return () => clearTimeout(t);
+  }, [screen, questView]);
 
   // Mandatory wallet login — nothing else renders until the player is signed in.
   if (!wallet) {
