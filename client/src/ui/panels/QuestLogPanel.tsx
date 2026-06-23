@@ -50,6 +50,13 @@ export function QuestLogPanel() {
             <span className="quest-points">★ {qv.seasonPoints.toLocaleString()} Season Points</span>
           </div>
 
+          {(qv.onboarding ?? []).some((q) => !q.claimed) && (
+            <div className="quest-section">
+              <div className="quest-section-head"><h3>✨ Getting Started</h3><span className="small muted">one-time</span></div>
+              {(qv.onboarding ?? []).map((q) => <QuestRow key={q.id} q={q} />)}
+            </div>
+          )}
+
           <div className="quest-section">
             <div className="quest-section-head"><h3>Daily</h3><span className="small muted">resets in {fmtResets(qv.dailyResetsInMs)}</span></div>
             {qv.daily.map((q) => <QuestRow key={q.id} q={q} />)}

@@ -15,7 +15,7 @@ export type QuestProgressType =
 
 export interface QuestDef {
   id: string;
-  kind: 'daily' | 'weekly';
+  kind: 'daily' | 'weekly' | 'onboarding';
   goal: string;             // human label
   type: QuestProgressType;  // the action that advances it
   target: number;
@@ -32,6 +32,7 @@ export interface QuestProgress {
 export interface QuestState {
   daily: { date: string; quests: QuestProgress[] };       // date = UTC yyyy-mm-dd
   weekly: { weekStart: string; quests: QuestProgress[] };  // weekStart = UTC Monday yyyy-mm-dd
+  onboarding: QuestProgress[];                             // one-time Starter Missions (never roll over)
   streak: { count: number; lastDay: string };             // lastDay = last UTC date a daily was claimed
   seasonPoints: number;
 }
@@ -53,6 +54,20 @@ export const WEEKLY: QuestDef[] = [
   { id: 'weekly_dailies', kind: 'weekly', goal: 'Play dailies on 5 days', type: 'daily_complete', target: 5,  aether: 500, points: 120 },
 ];
 
+/**
+ * One-time onboarding ladder ("Getting Started"). Tracked off the SAME events as
+ * dailies (catch/battle_win/summon already fire client-side), seeded once per
+ * account and never rolled over. Chunky rewards so finishing it ≈ funds a second
+ * 10-pull — front-loading the early-game hook.
+ */
+export const ONBOARDING: QuestDef[] = [
+  { id: 'ob_first_catch',  kind: 'onboarding', goal: 'Catch your first beast',    type: 'catch',      target: 1,  aether: 100, points: 8 },
+  { id: 'ob_first_wins',   kind: 'onboarding', goal: 'Win your first 3 battles',  type: 'battle_win', target: 3,  aether: 150, points: 10 },
+  { id: 'ob_first_summon', kind: 'onboarding', goal: 'Summon at the Aether Rift', type: 'summon',     target: 1,  aether: 200, points: 12 },
+  { id: 'ob_catch_five',   kind: 'onboarding', goal: 'Catch 5 beasts',            type: 'catch',      target: 5,  aether: 200, points: 12 },
+  { id: 'ob_win_ten',      kind: 'onboarding', goal: 'Win 10 battles',            type: 'battle_win', target: 10, aether: 350, points: 20 },
+];
+
 const DAILY_COUNT = 3;
 
 /** ◈ bonus for a login streak of `count` consecutive days (holds at day 7). */
@@ -63,7 +78,7 @@ export function streakBonus(count: number): number {
 }
 
 export function questDef(id: string): QuestDef | undefined {
-  return DAILY_POOL.find((d) => d.id === id) ?? WEEKLY.find((d) => d.id === id);
+  return DAILY_POOL.find((d) => d.id === id) ?? WEEKLY.find((d) => d.id === id) ?? ONBOARDING.find((d) => d.id === id);
 }
 
 // ---- time helpers (UTC, deterministic) --------------------------------------
@@ -109,11 +124,13 @@ export function assignDailies(accountId: string, date: string): QuestProgress[] 
 }
 
 const freshWeekly = (): QuestProgress[] => WEEKLY.map((q) => ({ id: q.id, progress: 0, claimed: false }));
+const freshOnboarding = (): QuestProgress[] => ONBOARDING.map((q) => ({ id: q.id, progress: 0, claimed: false }));
 
 export function freshQuestState(accountId: string, now: number): QuestState {
   return {
     daily: { date: utcDate(now), quests: assignDailies(accountId, utcDate(now)) },
     weekly: { weekStart: utcWeekStart(now), quests: freshWeekly() },
+    onboarding: freshOnboarding(),
     streak: { count: 0, lastDay: '' },
     seasonPoints: 0,
   };
@@ -125,6 +142,8 @@ export function rollOver(state: QuestState, accountId: string, now: number): voi
   if (state.daily.date !== today) state.daily = { date: today, quests: assignDailies(accountId, today) };
   const week = utcWeekStart(now);
   if (state.weekly.weekStart !== week) state.weekly = { weekStart: week, quests: freshWeekly() };
+  // Onboarding is one-time: never reset it, but backfill accounts that predate it.
+  if (!Array.isArray(state.onboarding)) state.onboarding = freshOnboarding();
 }
 
 /** Advance every matching, unclaimed quest (daily + weekly) toward its target. */
@@ -141,6 +160,7 @@ export function applyProgress(state: QuestState, type: QuestProgressType, amount
   };
   bump(state.daily.quests, DAILY_POOL);
   bump(state.weekly.quests, WEEKLY);
+  if (Array.isArray(state.onboarding)) bump(state.onboarding, ONBOARDING);
   return changed;
 }
 
@@ -150,7 +170,9 @@ export interface ClaimResult { aether: number; points: number; streakBonus: numb
  *  the ◈ (incl. any streak bonus) + Season Points granted, or null if not claimable. */
 export function claim(state: QuestState, questId: string, now: number): ClaimResult | null {
   const inDaily = state.daily.quests.find((q) => q.id === questId);
-  const qp = inDaily ?? state.weekly.quests.find((q) => q.id === questId);
+  const qp = inDaily
+    ?? state.weekly.quests.find((q) => q.id === questId)
+    ?? state.onboarding?.find((q) => q.id === questId);
   const def = questDef(questId);
   if (!qp || qp.claimed || !def || qp.progress < def.target) return null;
   qp.claimed = true;
@@ -183,6 +205,7 @@ export function toQuestView(state: QuestState, now: number): QuestView {
   return {
     daily: items(state.daily.quests),
     weekly: items(state.weekly.quests),
+    onboarding: items(state.onboarding ?? []),
     streak: state.streak.count,
     seasonPoints: state.seasonPoints,
     dailyResetsInMs: Math.max(0, nextUtcMidnight(now) - now),

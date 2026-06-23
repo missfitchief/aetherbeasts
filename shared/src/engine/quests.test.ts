@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   freshQuestState, assignDailies, rollOver, applyProgress, claim, toQuestView,
-  streakBonus, utcDate, utcWeekStart, questDef, DAILY_POOL,
+  streakBonus, utcDate, utcWeekStart, questDef, DAILY_POOL, ONBOARDING,
 } from './quests.js';
 
 const DAY = 86_400_000;
@@ -118,5 +118,46 @@ describe('catalog sanity', () => {
       expect(d.aether).toBeGreaterThan(0);
       expect(d.points).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('onboarding (Starter Missions)', () => {
+  it('seeds the one-time ladder on a fresh account and projects it', () => {
+    const s = freshQuestState('acct', T_TUE);
+    expect(s.onboarding.map((q) => q.id)).toEqual(ONBOARDING.map((d) => d.id));
+    expect(s.onboarding.every((q) => q.progress === 0 && !q.claimed)).toBe(true);
+    const v = toQuestView(s, T_TUE);
+    expect(v.onboarding).toHaveLength(ONBOARDING.length);
+    expect(v.onboarding[0].kind).toBe('onboarding');
+  });
+
+  it('advances on the same events as dailies; one catch advances first-catch AND catch-5', () => {
+    const s = freshQuestState('acct', T_TUE);
+    applyProgress(s, 'catch', 1);
+    expect(s.onboarding.find((q) => q.id === 'ob_first_catch')!.progress).toBe(1);
+    expect(s.onboarding.find((q) => q.id === 'ob_catch_five')!.progress).toBe(1);
+  });
+
+  it('claims grant ◈ + points but never touch the daily streak', () => {
+    const s = freshQuestState('acct', T_TUE);
+    applyProgress(s, 'catch', 1);
+    const r = claim(s, 'ob_first_catch', T_TUE);
+    expect(r?.aether).toBe(100);     // no streak bonus on an onboarding claim
+    expect(r?.points).toBe(8);
+    expect(s.seasonPoints).toBe(8);
+    expect(s.streak.count).toBe(0);  // onboarding must NOT advance the login streak
+    expect(claim(s, 'ob_first_catch', T_TUE)).toBeNull(); // idempotent
+  });
+
+  it('never rolls over, and backfills accounts that predate the field', () => {
+    const s = freshQuestState('acct', T_TUE);
+    applyProgress(s, 'catch', 1);
+    rollOver(s, 'acct', T_TUE + 8 * DAY);  // far future: dailies + weeklies reset
+    expect(s.onboarding.find((q) => q.id === 'ob_first_catch')!.progress).toBe(1); // preserved
+
+    delete (s as { onboarding?: unknown }).onboarding; // simulate a legacy record
+    rollOver(s, 'acct', T_TUE + 8 * DAY);
+    expect(Array.isArray(s.onboarding)).toBe(true);
+    expect(s.onboarding).toHaveLength(ONBOARDING.length);
   });
 });

@@ -1,10 +1,11 @@
 /**
  * Wild-beast spawning in the forest (the PvE faucet). The forest holds up to a
- * level-scaled CAP of roaming beasts, and a fresh one appears every level-scaled
- * INTERVAL — about every 15 min early on, slower and fewer as your team grows.
- * Accrual is real-time AND offline, so the forest repopulates while you're away.
- * You meet a beast by walking onto it; catching/defeating it frees a slot that
- * refills over time.
+ * level-scaled CAP of roaming beasts (a few for new tamers, tightening to one
+ * late game), and a fresh one appears every level-scaled INTERVAL — only a couple
+ * of minutes early on so the first session catches fast, slower and fewer as your
+ * team grows. Accrual is real-time AND offline, so the forest repopulates while
+ * you're away. You meet a beast by walking onto it; catching/defeating it frees a
+ * slot that refills over time.
  *
  * Progression metric `L` = the level of your strongest party member.
  */
@@ -21,21 +22,25 @@ export function forestLevel(save: SaveData): number {
   return clampLevel(top || 5);
 }
 
-/** Minutes between wild spawns — grows with progression (15 → ~119). */
+/** Minutes between wild spawns — short early so new tamers catch fast, lengthening
+ *  with progression (≈2 at Lv1 → ≈10 at Lv10 → ≈18 at Lv20 → caps at 90). */
 export function wildIntervalMin(level: number): number {
-  return 15 + Math.round((clampLevel(level) - 1) * 1.05);
+  return Math.round(Math.min(90, 2 + (clampLevel(level) - 1) * 0.85));
 }
 export function wildIntervalMs(level: number): number {
   return wildIntervalMin(level) * MS_PER_MIN;
 }
 
 /**
- * Only ONE wild beast is ever available at a time — the pool never banks. After
- * an interval a single beast appears and simply waits (no accumulation) until you
- * encounter it; then the timer resets. Waiting 10 h still yields just one. "Fewer
- * at higher level" comes entirely from the interval getting longer.
+ * How many wild beasts can be banked & ready at once. Front-loaded so new tamers
+ * find a few back-to-back (no waiting between the first catches), tightening to a
+ * single roamer late game. Beyond the cap the pool stops accumulating, so "fewer
+ * at higher level" comes from both a lower cap and the longer interval.
  */
-export function wildCap(_level: number): number {
+export function wildCap(level: number): number {
+  const l = clampLevel(level);
+  if (l <= 12) return 3;
+  if (l <= 30) return 2;
   return 1;
 }
 

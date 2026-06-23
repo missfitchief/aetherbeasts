@@ -102,7 +102,7 @@ export interface AetherBalance {
 export interface QuestViewItem {
   id: string;
   goal: string;
-  kind: 'daily' | 'weekly';
+  kind: 'daily' | 'weekly' | 'onboarding';
   target: number;
   progress: number;
   claimed: boolean;
@@ -113,6 +113,7 @@ export interface QuestViewItem {
 export interface QuestView {
   daily: QuestViewItem[];
   weekly: QuestViewItem[];
+  onboarding: QuestViewItem[];
   streak: number;
   seasonPoints: number;
   dailyResetsInMs: number;

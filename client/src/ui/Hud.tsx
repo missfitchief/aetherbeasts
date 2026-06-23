@@ -37,7 +37,8 @@ export function Hud() {
   const inForest = (save.position?.y ?? 0) >= 24;
   const { caught } = dexCounts(save);
   const now = Date.now();
-  const wildReady = wildCount(save, now) > 0;
+  const wildN = wildCount(save, now);
+  const wildReady = wildN > 0;
   const wildNext = wildNextInMs(save, now);
 
   return (
@@ -48,7 +49,7 @@ export function Hud() {
       {profile && <div className="pill" title="Battle Credits — staked in PvP, never cashed out">⚔ {profile.credits.toLocaleString()} BC</div>}
       {balance && <div className="pill" title={`On-chain $AETHER balance (${balance.mode})`}>⛓ {balance.amount.toLocaleString()} {balance.mode === 'sim' ? '$AETHER·sim' : '$AETHER'}</div>}
       <div className={'pill wild-pill' + (wildReady ? ' ready' : '')} title="A wild beast is roaming the grass when ready; encounter it to reset the timer.">
-        {wildReady ? '🐾 Wild beast roaming!' : `🐾 Next wild: ${fmtCountdown(wildNext)}`}
+        {wildReady ? (wildN > 1 ? `🐾 ${wildN} wild beasts roaming!` : '🐾 Wild beast roaming!') : `🐾 Next wild: ${fmtCountdown(wildNext)}`}
       </div>
       <div className="pill objective">🎯 {objective(caught, inForest)}</div>
       <div className="spacer" />
