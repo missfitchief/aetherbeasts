@@ -299,14 +299,14 @@ export class OverworldScene extends Phaser.Scene {
   // --- input loop ---
   update(time: number): void {
     const st = useGame.getState();
-    // Re-arm interact only once the key has been released (prevents the
-    // dialogue-dismiss keypress from instantly re-opening the same interaction).
-    if (!this.interactKeyDown()) this.canInteract = true;
-
     if (st.screen !== 'playing' || st.panel || st.dialogue || this.busy) {
       this.prompt.setVisible(false);
       return;
     }
+    // Re-arm interact only once the key is released — and ONLY while nothing is
+    // open. If we re-armed during a dialogue, the keypress that closes the last
+    // line would instantly re-trigger the same NPC and loop the conversation.
+    if (!this.interactKeyDown()) this.canInteract = true;
     if (this.moving) return;
 
     this.updatePrompt(time);
