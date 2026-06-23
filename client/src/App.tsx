@@ -32,13 +32,13 @@ export function App() {
     if (!wallet || screen === 'title' || screen === 'starter') audio.playMusic('bgm_title', 0.4);
   }, [screen, wallet]);
 
-  // Pop the quest board on login ONLY when a reward is actually waiting — i.e. a
-  // quest is complete and unclaimed. Fresh/in-progress/already-claimed → stay quiet.
+  // Pop the quest board on login when there are quests to do (any unclaimed daily
+  // or weekly). Only when EVERYTHING is already claimed does it stay quiet.
   useEffect(() => {
     if (questPopupShown || screen !== 'playing' || !questView) return;
     questPopupShown = true; // one-shot per session, evaluated at login
-    const claimable = (q: { progress: number; target: number; claimed: boolean }) => !q.claimed && q.progress >= q.target;
-    if (!questView.daily.some(claimable) && !questView.weekly.some(claimable)) return;
+    const hasUnclaimed = questView.daily.some((q) => !q.claimed) || questView.weekly.some((q) => !q.claimed);
+    if (!hasUnclaimed) return;
     const t = setTimeout(() => {
       const g = useGame.getState();
       if (!g.panel && !g.dialogue) g.openPanel('quests'); // don't clobber a panel or the intro
