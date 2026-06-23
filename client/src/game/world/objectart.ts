@@ -352,6 +352,27 @@ function stump(): HTMLCanvasElement {
   disc(x, 8, 6, 2, '#a3784a'); dot(x, 8, 6, '#6b4a2a');
   return c;
 }
+// ---- PORTAL: an obsidian archway with a glowing ember core (Emberhollow gate) -
+function portal(): HTMLCanvasElement {
+  const { c, x } = cv(28, 40);
+  shadow(x, 14, 38, 10);
+  // obsidian arch: rounded top + two pillars, with lit/shadowed stone edges
+  disc(x, 14, 15, 13, '#2b2333');
+  rect(x, 1, 15, 26, 23, '#2b2333');
+  rect(x, 1, 15, 3, 23, '#3c3346'); rect(x, 24, 15, 3, 23, '#1f1828');
+  // carve the inner mouth of the cave
+  disc(x, 14, 16, 9, '#140d1b');
+  rect(x, 5, 17, 18, 21, '#140d1b');
+  // ember glow — concentric hot core (the "heat-haze" that seals it)
+  disc(x, 14, 19, 8, '#7a1f5a');
+  disc(x, 14, 20, 6, '#b3340a');
+  disc(x, 14, 21, 4, '#f59e0b');
+  disc(x, 14, 22, 2, '#ffe9a8');
+  // rising sparks
+  dot(x, 11, 14, '#ffd9a0'); dot(x, 17, 16, '#ffb870'); dot(x, 14, 11, '#fff0c8'); dot(x, 9, 20, '#ff9d5c');
+  outline(x, 28, 40, '#0d0712');
+  return c;
+}
 
 // ---- interior furniture ---------------------------------------------------
 function bed(): HTMLCanvasElement {
@@ -497,6 +518,7 @@ export function generateObjectArt(scene: Phaser.Scene): void {
   register(scene, 'lamp', lamp());
   register(scene, 'bush', bush());
   register(scene, 'stump', stump());
+  register(scene, 'portal', portal());
   // interior furniture
   register(scene, 'bed', bed());
   register(scene, 'table', table());

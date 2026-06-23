@@ -15,7 +15,7 @@ export interface Tile {
 export type ObjKind =
   | 'tree' | 'tree2' | 'tree3' | 'pine'
   | 'cottage' | 'townhouse' | 'lab' | 'shop' | 'cabin' | 'manor'
-  | 'fence' | 'sign' | 'shrine' | 'church' | 'lamp' | 'bush' | 'stump'
+  | 'fence' | 'sign' | 'shrine' | 'church' | 'lamp' | 'bush' | 'stump' | 'portal'
   | 'bed' | 'table' | 'chair' | 'bookshelf' | 'counter' | 'pot' | 'rug' | 'fireplace' | 'labmachine' | 'painting'
   | 'altar' | 'pew' | 'candle';
 
@@ -99,6 +99,8 @@ export const OBJ_DEF: Record<ObjKind, { sprite: string; fw: number; fh: number; 
   lamp: { sprite: 'lamp', fw: 1, fh: 1, solid: true },
   bush: { sprite: 'bush', fw: 1, fh: 1, solid: false },
   stump: { sprite: 'stump', fw: 1, fh: 1, solid: false },
+  portal: { sprite: 'portal', fw: 1, fh: 2, solid: false }, // walk-through: you step onto it to warp
+
   // interior furniture
   bed: { sprite: 'bed', fw: 1, fh: 2, solid: true },
   table: { sprite: 'table', fw: 1, fh: 1, solid: true },
@@ -257,6 +259,7 @@ export function buildWorld(): WorldMap {
     requiresBadge: 'verdant',
     lockedText: ['A shimmering heat-haze seals the cave mouth to the south.', 'Best the Warden of Whisperwood for the Verdant Badge to pass.'],
   });
+  obj('portal', 22, 53); // the visible Emberhollow gate, sitting on the warp tile
   // one large scenic pond (replaces the scattered small ponds), left of the path
   pond(12, 44, 8, 5);
   // tree clusters framing the route (kept clear of the pond + central path)
@@ -426,6 +429,7 @@ function buildEmberhollow(): WorldMap {
   obj('lamp', 4, 4); obj('lamp', 23, 4); obj('stump', 5, 18); obj('stump', 22, 18);
   obj('sign', 11, 3);
   obj('shrine', 17, 3); // heal/save point near the entrance so a cave whiteout doesn't bounce to town
+  obj('portal', 14, 1); // the gate back up to Whisperwood
 
   const npcs: Npc[] = [
     { id: 'tr_e1', kind: 'trainer', x: 8, y: 7, facing: 'down', sheet: 'sheet_guy', trainerId: 't_ember_1' },
