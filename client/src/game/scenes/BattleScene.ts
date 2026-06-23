@@ -104,10 +104,13 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private buildPanels(): void {
-    const e = this.makePanel(28, 30, this.state.enemy.creature, false);
+    // Each HP box sits on the SAME side as its monster — enemy upper-right (by the
+    // enemy sprite), player lower-left (by your sprite) — so it's always obvious
+    // which beast is yours, instead of the box sitting diagonally across from it.
+    const e = this.makePanel(W - PANEL_W - 28, 30, this.state.enemy.creature, false);
     this.enemyPanel = e.container;
     this.enemyHp = e.hp;
-    const p = this.makePanel(W - PANEL_W - 28, 196, this.state.player.creature, true);
+    const p = this.makePanel(28, 196, this.state.player.creature, true);
     this.playerPanel = p.container;
     this.playerHp = p.hp;
     this.expFill = p.exp!;
@@ -121,13 +124,22 @@ export class BattleScene extends Phaser.Scene {
     const box = this.add.graphics();
     box.fillStyle(0x0d1526, 0.92);
     box.fillRoundedRect(0, 0, w, isPlayer ? 50 : 40, 6);
-    box.lineStyle(2, 0x8be0ff, 0.8);
+    // Your box gets a warm gold border; the enemy's stays cyan — a second at-a-glance cue.
+    box.lineStyle(2, isPlayer ? 0xffd166 : 0x8be0ff, 0.85);
     box.strokeRoundedRect(0, 0, w, isPlayer ? 50 : 40, 6);
     cont.add(box);
 
     const name = this.add.text(10, 6, displayName(c), { fontFamily: 'monospace', fontSize: '13px', color: '#ffffff' });
     const lv = this.add.text(w - 44, 6, `Lv${c.level}`, { fontFamily: 'monospace', fontSize: '12px', color: '#ffd166' });
     cont.add([name, lv]);
+    if (isPlayer) {
+      // A small "YOU" chip riding the top-left corner removes any doubt.
+      const you = this.add.text(8, -9, 'YOU', {
+        fontFamily: 'monospace', fontSize: '9px', color: '#1a1410',
+        backgroundColor: '#ffd166', padding: { x: 4, y: 1 },
+      }).setOrigin(0, 0);
+      cont.add(you);
+    }
 
     // hp bar
     const barX = 10;
