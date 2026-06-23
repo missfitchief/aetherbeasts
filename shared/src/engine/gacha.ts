@@ -15,7 +15,7 @@ import type { SaveData, Creature, Species } from '../types.js';
 import { SPECIES, SPECIES_ORDER, getSpecies } from '../data/species.js';
 import { createCreature } from './factory.js';
 import { storeCreature } from './save.js';
-import { pick, type RNG } from './rng.js';
+import { pick, seededRng, type RNG } from './rng.js';
 
 export type GachaTier = 3 | 4 | 5;
 export type Currency = 'aether';
@@ -51,6 +51,17 @@ const FEATURED_CHANCE = 0.5;  // share of a tier's pulls that hit the featured u
 const SUMMON_LEVEL = 5;
 /** Duplicate refund in $AETHER, by tier. */
 const DUPE_AETHER: Record<GachaTier, number> = { 3: 20, 4: 60, 5: 200 };
+
+/** Published, verifiable odds — the single source of truth the in-game Fairness panel renders. */
+export const GACHA_ODDS = {
+  rate5: RATE_5,
+  rate4: RATE_4,
+  rate3: Math.round((1 - RATE_5 - RATE_4) * 100) / 100,
+  hardPity5: HARD_PITY_5,
+  softPity5From: SOFT_PITY_START,
+  pity4Floor: PITY_4,
+  featuredShare: FEATURED_CHANCE,
+};
 
 export interface GachaBanner {
   id: string;
@@ -147,6 +158,8 @@ export interface SummonReport {
   results: SummonOutcome[];
   spent: { currency: Currency; amount: number };
   aetherGained: number;
+  /** The RNG seed that produced this pull — reproduce it via previewSummon (provably fair). */
+  seed?: number;
 }
 
 export function summonCost(bannerId: string, count: number): { currency: Currency; amount: number } {
@@ -202,4 +215,30 @@ export function summon(
 /** Best tier in a report — for reveal flourish. */
 export function topTier(report: SummonReport): GachaTier {
   return report.results.reduce<GachaTier>((m, r) => (r.tier > m ? r.tier : m), 3);
+}
+
+/**
+ * Reproduce a seeded pull's tier/species/shiny sequence WITHOUT mutating a save —
+ * the verifier behind provably-fair pulls. It consumes RNG IDENTICALLY to summon()
+ * (rollTier → pickSpecies → createCreature), so the same seed + starting pity always
+ * yields the same results. Anyone can re-run this to audit a pull.
+ */
+export function previewSummon(
+  bannerId: string,
+  seed: number,
+  count: number,
+  startSince5 = 0,
+  startSince4 = 0,
+): { tier: GachaTier; speciesId: string; shiny: boolean }[] {
+  const banner = getBanner(bannerId);
+  const rng = seededRng(seed);
+  const pity: PityState = { since5: startSince5, since4: startSince4 };
+  const out: { tier: GachaTier; speciesId: string; shiny: boolean }[] = [];
+  for (let i = 0; i < count; i++) {
+    const tier = rollTier(rng, pity);
+    const speciesId = pickSpecies(rng, tier, banner);
+    const c = createCreature(speciesId, SUMMON_LEVEL, { rng }); // consume RNG exactly as summon()
+    out.push({ tier, speciesId, shiny: c.shiny });
+  }
+  return out;
 }

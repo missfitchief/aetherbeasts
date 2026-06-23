@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  BANNERS, getBanner, summonCost, getSpecies,
+  BANNERS, getBanner, summonCost, getSpecies, GACHA_ODDS,
   type SummonReport, type GachaTier, type Currency,
 } from '@aether/shared';
 import { useGame } from '../../state/store.js';
@@ -21,6 +21,7 @@ export function SummonPanel() {
   const save = useGame((s) => s.save);
   const summon = useGame((s) => s.summon);
   const closePanel = useGame((s) => s.closePanel);
+  const openPanel = useGame((s) => s.openPanel);
   const showToast = useGame((s) => s.showToast);
   const summonPhase = useNet((s) => s.summonPhase);
   const summonReport = useNet((s) => s.summonReport);
@@ -87,8 +88,16 @@ export function SummonPanel() {
           <div className="rift-info">
             <div className="rift-name">{banner.name}</div>
             <div className="muted small">{banner.blurb}</div>
-            <div className="rift-rates">5★ 3% · 4★ 12% · 3★ 85%</div>
-            <div className="small muted">Pity: guaranteed 5★ by 80 pulls — you're at {pity}/80.</div>
+            <div className="rift-rates">
+              5★ {(GACHA_ODDS.rate5 * 100).toFixed(0)}% · 4★ {(GACHA_ODDS.rate4 * 100).toFixed(0)}% · 3★ {(GACHA_ODDS.rate3 * 100).toFixed(0)}%
+            </div>
+            <div className="small muted">
+              Pity: guaranteed 5★ by {GACHA_ODDS.hardPity5} pulls — you're at {pity}/{GACHA_ODDS.hardPity5}.{' '}
+              <button
+                onClick={() => openPanel('fairness')}
+                style={{ background: 'none', border: 'none', color: '#8be0ff', cursor: 'pointer', textDecoration: 'underline', font: 'inherit', padding: 0 }}
+              >Provably fair ⓘ</button>
+            </div>
             {banner.featured5 && (
               <div className="small">
                 Featured 5★: <b style={{ color: TIER_META[5].color }}>{getSpecies(banner.featured5).name}</b>
@@ -180,6 +189,7 @@ function SummonReveal({ report, onClose }: { report: SummonReport; onClose: () =
       </div>
       <div className="reveal-foot">
         {report.aetherGained > 0 && <span className="muted small">Duplicates refunded ◈ {report.aetherGained} $AETHER.</span>}
+        {report.seed != null && <span className="muted small" title="Reproduce this exact pull in the Provably-Fair panel">🔒 Fair seed: {report.seed}</span>}
         <button className="btn" onClick={onClose}>Continue</button>
       </div>
     </div>

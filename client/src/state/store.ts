@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import {
   newSave, chooseStarter, storeCreature, healParty, addItem,
-  normalizeSave, summon as engineSummon, canAfford, defaultRng, awaken as engineAwaken,
+  normalizeSave, summon as engineSummon, canAfford, seededRng, awaken as engineAwaken,
   type SaveData, type Creature, type SummonReport,
 } from '@aether/shared';
 import { saveAdapter, getOrCreatePlayerId } from './persistence.js';
@@ -9,7 +9,7 @@ import { saveAdapter, getOrCreatePlayerId } from './persistence.js';
 export interface SlotLoc { zone: 'party' | 'box'; index: number }
 
 export type Screen = 'title' | 'starter' | 'playing';
-export type Panel = null | 'menu' | 'party' | 'box' | 'dex' | 'bag' | 'shop' | 'summary' | 'summon' | 'quests' | 'help' | 'login' | 'share';
+export type Panel = null | 'menu' | 'party' | 'box' | 'dex' | 'bag' | 'shop' | 'summary' | 'summon' | 'quests' | 'help' | 'login' | 'share' | 'fairness';
 
 export interface DialogueState {
   lines: string[];
@@ -219,7 +219,11 @@ export const useGame = create<GameStore>((set, get) => ({
   summon(bannerId, count) {
     const { save } = get();
     if (!save || !canAfford(save, bannerId, count)) return null;
-    const report = engineSummon(save, bannerId, count, defaultRng);
+    // Provably fair: every pull runs off an explicit seed, recorded on the report
+    // so the player can reproduce the exact result via previewSummon (Fairness panel).
+    const seed = Math.floor(Math.random() * 0x7fffffff);
+    const report = engineSummon(save, bannerId, count, seededRng(seed));
+    report.seed = seed;
     save.updatedAt = Math.max((save.updatedAt ?? 0) + 1, Date.now());
     saveAdapter.save(save);
     set({ save: { ...save }, version: get().version + 1 });

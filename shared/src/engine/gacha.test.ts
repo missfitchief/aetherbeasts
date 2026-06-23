@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   summon, summonCost, canAfford, tierOf, GACHA_POOL, getBanner, BANNERS,
+  previewSummon, GACHA_ODDS,
 } from './gacha.js';
 import { newSave } from './save.js';
 import { seededRng, type RNG } from './rng.js';
@@ -26,6 +27,22 @@ describe('gacha pools', () => {
     expect(tierOf('grodent')).toBe(3);   // common
     expect(tierOf('jestar')).toBe(4);    // uncommon
     expect(tierOf('leviocean')).toBe(5); // rare
+  });
+});
+
+describe('provably fair', () => {
+  it('previewSummon reproduces a seeded summon exactly', () => {
+    const save = freshSave();
+    const seed = 1234567;
+    const report = summon(save, 'standard', 10, seededRng(seed));
+    const preview = previewSummon('standard', seed, 10, 0, 0);
+    expect(preview.map((p) => p.speciesId)).toEqual(report.results.map((r) => r.speciesId));
+    expect(preview.map((p) => p.tier)).toEqual(report.results.map((r) => r.tier));
+    expect(preview.map((p) => p.shiny)).toEqual(report.results.map((r) => r.shiny));
+  });
+  it('published odds match the engine and sum to 1', () => {
+    expect(GACHA_ODDS.rate5 + GACHA_ODDS.rate4 + GACHA_ODDS.rate3).toBeCloseTo(1, 5);
+    expect(GACHA_ODDS.hardPity5).toBe(80);
   });
 });
 

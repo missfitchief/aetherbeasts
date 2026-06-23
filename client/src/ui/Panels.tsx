@@ -11,6 +11,7 @@ import { SummonPanel } from './panels/SummonPanel.js';
 import { QuestLogPanel } from './panels/QuestLogPanel.js';
 import { LoginCalendarPanel } from './panels/LoginCalendarPanel.js';
 import { ShareCardPanel } from './panels/ShareCardPanel.js';
+import { FairnessPanel } from './panels/FairnessPanel.js';
 import { HelpPanel } from './panels/HelpPanel.js';
 
 export function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
@@ -55,6 +56,8 @@ export function Panels() {
       return <LoginCalendarPanel />;
     case 'share':
       return <ShareCardPanel />;
+    case 'fairness':
+      return <FairnessPanel />;
     case 'help':
       return <HelpPanel />;
     default:
