@@ -8,7 +8,9 @@ services:
   - type: web
     name: aetherbeasts-server
     runtime: node
-    plan: starter # always-warm; do NOT use the free tier (it sleeps and drops live battles)
+    plan: free # free to start (no card). NOTE: free instances sleep after ~15 min idle
+               # and cold-start in ~30-60s; a live battle can drop if it sleeps. Upgrade
+               # to "starter" (always-warm, $7/mo) for production once you have traffic.
     region: oregon
     rootDir: .
     buildCommand: npm install --include=dev
