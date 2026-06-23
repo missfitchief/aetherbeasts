@@ -41,6 +41,9 @@ export interface BattleState {
   enemyActiveIndex?: number;
   /** True for player-vs-player matches (resolved via `resolveTurnPvP`). */
   isPvp?: boolean;
+  /** True for AI trainer/boss battles — the enemy fields hold the trainer's team,
+   *  fought sequentially; the battle is won only when the whole team faints. */
+  isTrainer?: boolean;
   isWild: boolean;
   turn: number;
   over: boolean;
@@ -96,6 +99,28 @@ export function startBattle(party: Creature[], enemy: Creature, opts: { isWild?:
     party,
     activeIndex: Math.max(0, activeIndex),
     isWild: opts.isWild ?? true,
+    turn: 0,
+    over: false,
+    outcome: null,
+    runAttempts: 0,
+  };
+}
+
+/** Begin a PvE battle against an AI-controlled trainer/boss TEAM. The enemy team
+ *  is fought sequentially (the next beast is auto-sent on faint) and the battle is
+ *  only won when the whole team faints. Catching is disabled (isWild=false). */
+export function startTrainerBattle(party: Creature[], enemyTeam: Creature[]): BattleState {
+  const pIdx = Math.max(0, party.findIndex((c) => c.currentHp > 0));
+  const eIdx = Math.max(0, enemyTeam.findIndex((c) => c.currentHp > 0));
+  return {
+    player: makeSide(party[pIdx]),
+    enemy: makeSide(enemyTeam[eIdx]),
+    party,
+    activeIndex: pIdx,
+    enemyParty: enemyTeam,
+    enemyActiveIndex: eIdx,
+    isWild: false,
+    isTrainer: true,
     turn: 0,
     over: false,
     outcome: null,
@@ -266,24 +291,43 @@ function name(side: BattleSide): string {
 // ---------------------------------------------------------------------------
 // Win / exp handling
 // ---------------------------------------------------------------------------
-function awardWin(state: BattleState, out: BattleEvent[]): void {
+/** Grant the active player creature exp for ONE defeated enemy (+ level/learn/evolve events). */
+function awardKillExp(state: BattleState, defeated: Creature, out: BattleEvent[]): void {
   const active = state.player.creature;
-  const amount = expYield(state.enemy.creature);
+  if (isFainted(active)) return;
+  const amount = expYield(defeated);
+  out.push({ type: 'exp', uid: active.uid, amount });
+  const res: LevelUpResult = gainExp(active, amount);
+  if (res.levelsGained > 0) out.push({ type: 'levelup', uid: active.uid, level: res.newLevel });
+  for (const m of res.newMoves) out.push({ type: 'learn', uid: active.uid, moveId: m });
+  const evo = res.evolveInto ?? pendingEvolution(active);
+  if (evo) out.push({ type: 'evolve-ready', uid: active.uid, into: evo });
+}
+
+/** Wild win: a single enemy — award its exp and end the battle. */
+function awardWin(state: BattleState, out: BattleEvent[]): void {
   out.push({ type: 'message', text: `The wild ${name(state.enemy)} was defeated!` });
-  if (!isFainted(active)) {
-    out.push({ type: 'exp', uid: active.uid, amount });
-    const res: LevelUpResult = gainExp(active, amount);
-    for (let i = 0; i < res.levelsGained; i++) {
-      // level events use the final level for display simplicity
-    }
-    if (res.levelsGained > 0) out.push({ type: 'levelup', uid: active.uid, level: res.newLevel });
-    for (const m of res.newMoves) out.push({ type: 'learn', uid: active.uid, moveId: m });
-    const evo = res.evolveInto ?? pendingEvolution(active);
-    if (evo) out.push({ type: 'evolve-ready', uid: active.uid, into: evo });
-  }
+  awardKillExp(state, state.enemy.creature, out);
   state.over = true;
   state.outcome = 'win';
   out.push({ type: 'end', outcome: 'win' });
+}
+
+/** Trainer/boss enemy fainted: award its exp, then send the next beast — or end
+ *  the battle as a win once the trainer's whole team is down. */
+function handleEnemyFaintTrainer(state: BattleState, out: BattleEvent[]): void {
+  out.push({ type: 'message', text: `${name(state.enemy)} was defeated!` });
+  awardKillExp(state, state.enemy.creature, out);
+  const nextIdx = (state.enemyParty ?? []).findIndex((c) => c.currentHp > 0);
+  if (nextIdx === -1) {
+    state.over = true;
+    state.outcome = 'win';
+    out.push({ type: 'end', outcome: 'win' });
+    return;
+  }
+  pvpSetActive(state, 'enemy', nextIdx);
+  out.push({ type: 'switch', partyIndex: nextIdx, side: 'enemy' });
+  out.push({ type: 'message', text: `The trainer sent out ${name(state.enemy)}!` });
 }
 
 // ---------------------------------------------------------------------------
@@ -320,8 +364,10 @@ export function resolveTurn(state: BattleState, action: PlayerAction, rng: RNG):
   // Resolve any faints into win/lose AFTER end-of-turn ticks
   if (!state.over) {
     if (isFainted(state.enemy.creature)) {
-      awardWin(state, out);
-    } else if (isFainted(state.player.creature)) {
+      if (state.isTrainer) handleEnemyFaintTrainer(state, out);
+      else awardWin(state, out);
+    }
+    if (!state.over && isFainted(state.player.creature)) {
       handlePlayerFaint(state, out);
     }
   }
