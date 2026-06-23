@@ -213,6 +213,29 @@ html, body, #root {
 .x-btn { background: transparent; border: none; color: var(--muted); font-size: 22px; cursor: pointer; }
 .x-btn:hover { color: var(--text); }
 
+/* Arcade pop-in for every popup, matching the game's chunky pixel panels. */
+.overlay { animation: overlayFade 130ms steps(3, end) both; }
+@keyframes overlayFade { from { opacity: 0; } to { opacity: 1; } }
+.panel { animation: panelPop 300ms cubic-bezier(0.2, 0.9, 0.28, 1.32) both; transform-origin: center bottom; will-change: transform; }
+@keyframes panelPop {
+  0%   { opacity: 0; transform: scale(0.62) translateY(22px); }
+  55%  { opacity: 1; transform: scale(1.04) translateY(0); }
+  78%  { transform: scale(0.985); }
+  100% { transform: scale(1); }
+}
+/* The title bar drops in just after the panel lands. */
+.panel-head h2 { animation: headSlide 360ms 90ms ease-out both; }
+@keyframes headSlide { from { opacity: 0; transform: translateY(-6px); letter-spacing: 6px; } to { opacity: 1; transform: translateY(0); letter-spacing: 2px; } }
+
+/* Quest rows snap in one after another. */
+.quest-row { animation: questRowIn 240ms ease-out both; }
+.quest-section .quest-row:nth-child(2) { animation-delay: 80ms; }
+.quest-section .quest-row:nth-child(3) { animation-delay: 140ms; }
+.quest-section .quest-row:nth-child(4) { animation-delay: 200ms; }
+.quest-section .quest-row:nth-child(5) { animation-delay: 260ms; }
+@keyframes questRowIn { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: translateX(0); } }
+.quest-header { animation: questRowIn 260ms 60ms ease-out both; }
+
 /* ---- Menu grid ---- */
 .menu-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .menu-item {
