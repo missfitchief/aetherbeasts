@@ -496,6 +496,64 @@ function candle(): HTMLCanvasElement {
   return c;
 }
 
+// ---- Emberhollow + Aether League decor ------------------------------------
+function crystal(): HTMLCanvasElement {
+  const { c, x } = cv(16, 18);
+  shadow(x, 8, 17, 6);
+  const gem = (cx: number, baseY: number, topY: number, halfW: number, mid: string, light: string, dark: string) => {
+    const h = baseY - topY;
+    for (let i = 0; i <= h; i++) {
+      const w = Math.max(1, Math.round(halfW * (1 - i / h)));
+      const y = baseY - i;
+      rect(x, cx - w, y, w * 2, 1, mid);
+      rect(x, cx - w, y, w, 1, light);   // lit left face
+      dot(x, cx + w - 1, y, dark);       // shadow edge
+    }
+    dot(x, cx, topY, '#ffffff');         // sparkle tip
+  };
+  gem(8, 17, 3, 4, '#7a3fc0', '#c79bff', '#3b1f6b');   // tall centre shard
+  gem(4, 17, 8, 2, '#5f30a0', '#a87fe0', '#2f1a55');   // left
+  gem(12, 17, 7, 2, '#5f30a0', '#a87fe0', '#2f1a55');  // right
+  outline(x, 16, 18, '#160a28');
+  return c;
+}
+function stalagmite(): HTMLCanvasElement {
+  const { c, x } = cv(14, 22);
+  shadow(x, 7, 21, 6);
+  const h = 19;
+  for (let i = 0; i <= h; i++) {
+    const w = Math.max(1, Math.round(6 * (1 - i / h)));
+    const y = 21 - i;
+    rect(x, 7 - w, y, w * 2, 1, '#5a4a40');
+    rect(x, 7 - w, y, w, 1, '#6e5b4e'); // lit
+    dot(x, 7 + w - 1, y, '#3a2e26');    // shadow
+  }
+  dot(x, 7, 12, '#f59e0b'); dot(x, 6, 15, '#b3340a'); dot(x, 8, 17, '#f59e0b'); // ember veins
+  outline(x, 14, 22, '#241b14');
+  return c;
+}
+function pillar(): HTMLCanvasElement {
+  const { c, x } = cv(16, 40);
+  shadow(x, 8, 39, 7);
+  rect(x, 2, 35, 12, 4, '#3a3550'); rect(x, 1, 38, 14, 2, '#2a2640');     // base
+  rect(x, 4, 4, 8, 32, '#6a6488'); rect(x, 4, 4, 3, 32, '#837dab'); rect(x, 9, 4, 3, 32, '#4f4a6b'); // shaft
+  for (let y = 6; y < 34; y += 3) dot(x, 7, y, '#3f3a58');               // fluting
+  rect(x, 2, 1, 12, 4, '#7b74a0'); rect(x, 1, 4, 14, 2, '#5a5478');      // capital
+  disc(x, 8, 2, 2, '#9a8cff');                                           // aether glow
+  outline(x, 16, 40, '#1a1730');
+  return c;
+}
+function brazier(): HTMLCanvasElement {
+  const { c, x } = cv(14, 24);
+  shadow(x, 7, 23, 5);
+  rect(x, 6, 12, 2, 11, '#4a4258'); rect(x, 3, 22, 8, 2, '#3a3348');     // stand
+  rect(x, 2, 9, 10, 4, '#6a6280'); rect(x, 2, 9, 10, 1, '#857da6'); rect(x, 3, 12, 8, 1, '#4a4258'); // bowl
+  disc(x, 7, 7, 4, '#b3340a'); disc(x, 7, 6, 3, '#f59e0b'); disc(x, 7, 5, 2, '#ffe9a8'); // flame
+  dot(x, 7, 2, '#fff0c8'); dot(x, 5, 4, '#ffb870'); dot(x, 9, 4, '#ffb870');
+  outline(x, 14, 24, '#1a1622');
+  return c;
+}
+
 export function generateObjectArt(scene: Phaser.Scene): void {
   register(scene, 'tree0', tree(11, ['#2c6b35', '#3a8a44', '#54b257', '#7bd06f'], 0));
   register(scene, 'tree1', tree(29, ['#2f7338', '#46974a', '#62b85e', '#8ad673'], 1));
@@ -512,6 +570,10 @@ export function generateObjectArt(scene: Phaser.Scene): void {
   register(scene, 'altar', altar());
   register(scene, 'pew', pew());
   register(scene, 'candle', candle());
+  register(scene, 'crystal', crystal());
+  register(scene, 'stalagmite', stalagmite());
+  register(scene, 'pillar', pillar());
+  register(scene, 'brazier', brazier());
   register(scene, 'fence', fence());
   register(scene, 'sign', sign());
   register(scene, 'shrine', shrine());

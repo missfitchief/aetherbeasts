@@ -17,7 +17,8 @@ export type ObjKind =
   | 'cottage' | 'townhouse' | 'lab' | 'shop' | 'cabin' | 'manor'
   | 'fence' | 'sign' | 'shrine' | 'church' | 'lamp' | 'bush' | 'stump' | 'portal'
   | 'bed' | 'table' | 'chair' | 'bookshelf' | 'counter' | 'pot' | 'rug' | 'fireplace' | 'labmachine' | 'painting'
-  | 'altar' | 'pew' | 'candle';
+  | 'altar' | 'pew' | 'candle'
+  | 'crystal' | 'stalagmite' | 'pillar' | 'brazier';
 
 /** An object anchored at the bottom-centre tile (x,y); footprint extends up. */
 export interface WorldObject {
@@ -115,6 +116,10 @@ export const OBJ_DEF: Record<ObjKind, { sprite: string; fw: number; fh: number; 
   altar: { sprite: 'altar', fw: 1, fh: 1, solid: true },
   pew: { sprite: 'pew', fw: 1, fh: 1, solid: true },
   candle: { sprite: 'candle', fw: 1, fh: 1, solid: true },
+  crystal: { sprite: 'crystal', fw: 1, fh: 1, solid: true },
+  stalagmite: { sprite: 'stalagmite', fw: 1, fh: 1, solid: true },
+  pillar: { sprite: 'pillar', fw: 1, fh: 2, solid: true },
+  brazier: { sprite: 'brazier', fw: 1, fh: 1, solid: true },
 };
 
 export const ROUTE_START_Y = 24;
@@ -440,6 +445,10 @@ function buildEmberhollow(): WorldMap {
   };
   // atmosphere (kept OFF the central descent column 14 so the boss stays reachable)
   obj('lamp', 4, 4); obj('lamp', 23, 4); obj('stump', 5, 18); obj('stump', 22, 18);
+  obj('crystal', 2, 3); obj('crystal', 25, 3); obj('crystal', 2, 16); obj('crystal', 25, 16);
+  obj('crystal', 2, 19); obj('crystal', 25, 19); obj('crystal', 12, 19); obj('crystal', 16, 19);
+  obj('stalagmite', 2, 10); obj('stalagmite', 25, 10); obj('stalagmite', 6, 18); obj('stalagmite', 21, 18);
+  obj('candle', 3, 4); obj('candle', 24, 4); obj('candle', 11, 11); obj('candle', 16, 11);
   obj('sign', 11, 3);
   obj('shrine', 17, 3); // heal/save point near the entrance so a cave whiteout doesn't bounce to town
   obj('portal', 14, 1); // the gate back up to Whisperwood
@@ -494,6 +503,9 @@ function buildAetherLeague(): WorldMap {
   };
   obj('candle', 9, 4); obj('candle', 15, 4);
   obj('pew', 5, 9); obj('pew', 19, 9); obj('pew', 5, 13); obj('pew', 19, 13);
+  obj('pillar', 3, 7); obj('pillar', 21, 7); obj('pillar', 3, 16); obj('pillar', 21, 16);
+  obj('brazier', 8, 3); obj('brazier', 16, 3); obj('brazier', 6, 18); obj('brazier', 18, 18);
+  obj('candle', 6, 6); obj('candle', 18, 6); obj('candle', 10, 19); obj('candle', 14, 19);
   obj('shrine', 9, 18); // heal between bouts
 
   const npcs: Npc[] = [
