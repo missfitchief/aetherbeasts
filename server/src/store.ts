@@ -33,6 +33,7 @@ export interface PlayerRecord {
   premiumPurchases: number; // verified premium-pull count (Exchange eligibility gate)
   lumenGrantKeys: string[]; // idempotency keys for once-per-period LUMEN faucets
   rankedLumen: { date: string; count: number }; // daily ranked-win LUMEN counter
+  lumenSeasonTier: number; // highest Season-Point LUMEN milestone granted (monotonic — no re-mint)
   createdAt: number;
   updatedAt: number;
 }
@@ -193,6 +194,7 @@ export class Store {
       premiumPurchases: 0,
       lumenGrantKeys: [],
       rankedLumen: { date: '', count: 0 },
+      lumenSeasonTier: 0,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -244,6 +246,7 @@ export class Store {
       premiumPurchases: 0,
       lumenGrantKeys: [],
       rankedLumen: { date: '', count: 0 },
+      lumenSeasonTier: 0,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -348,6 +351,7 @@ export class Store {
     if (typeof rec.premiumPurchases !== 'number') rec.premiumPurchases = 0;
     if (!Array.isArray(rec.lumenGrantKeys)) rec.lumenGrantKeys = [];
     if (!rec.rankedLumen) rec.rankedLumen = { date: '', count: 0 };
+    if (typeof rec.lumenSeasonTier !== 'number') rec.lumenSeasonTier = 0;
   }
 
   getLumen(id: string): number {
@@ -358,7 +362,18 @@ export class Store {
     const r = this.byId.get(id); if (!r || !(amount > 0)) return; this.ensureLumen(r);
     r.lumen += amount;
     r.lumenLots.push({ amount, earnedAt: Date.now(), source });
+    if (r.lumenLots.length > 100) this.consolidateAgedLots(r); // bound growth; aged lots are interchangeable
     this.queuePersist(r);
+  }
+  /** Merge all lots past the min-hold into one — bounds lumenLots without changing redeemability. */
+  private consolidateAgedLots(rec: PlayerRecord): void {
+    const cutoff = Date.now() - MIN_HOLD_DAYS * 86_400_000;
+    const aged = rec.lumenLots.filter((l) => l.earnedAt <= cutoff);
+    if (aged.length <= 1) return;
+    const fresh = rec.lumenLots.filter((l) => l.earnedAt > cutoff);
+    const merged = aged.reduce((a, l) => a + l.amount, 0);
+    const oldest = Math.min(...aged.map((l) => l.earnedAt));
+    rec.lumenLots = [{ amount: merged, earnedAt: oldest, source: 'consolidated' }, ...fresh];
   }
   /** Spend LUMEN on an in-game sink (awaken/spark/cosmetic). Consumes lots FIFO, any age. */
   spendLumen(id: string, amount: number): boolean {
@@ -437,6 +452,25 @@ export class Store {
     r.rankedLumen.count += 1;
     this.grantLumen(id, LUMEN_FAUCET.rankedWin, 'ranked_win');
     return LUMEN_FAUCET.rankedWin;
+  }
+  /** Season-Point milestone LUMEN. Uses a monotonic tier counter (NOT a prunable
+   *  idempotency key) so a long-lived account can never re-mint past milestones. */
+  grantSeasonLumen(id: string, tier: number): void {
+    const r = this.byId.get(id); if (!r) return; this.ensureLumen(r);
+    if (tier <= r.lumenSeasonTier) return;
+    const newTiers = tier - r.lumenSeasonTier;
+    r.lumenSeasonTier = tier;
+    this.grantLumen(id, newTiers * LUMEN_FAUCET.seasonPointMilestone, 'season');
+  }
+  /** Refund a failed redemption: re-grant the LUMEN AND roll back the daily/weekly cap
+   *  usage that commitRedeem charged, so a failed payout costs the player nothing. */
+  refundRedeem(id: string, amount: number, now: number): void {
+    const r = this.byId.get(id); if (!r || !(amount > 0)) return; this.ensureLumen(r);
+    this.grantLumen(id, amount, 'redeem_refund');
+    this.redeemUsage(id, now); // make sure the day/week buckets are current first
+    r.lumenRedeem.dayUsed = Math.max(0, r.lumenRedeem.dayUsed - amount);
+    r.lumenRedeem.weekUsed = Math.max(0, r.lumenRedeem.weekUsed - amount);
+    this.queuePersist(r);
   }
 
   // --- LUMEN Rewards Pool (global singleton; the ONLY source of Exchange payouts) ---

@@ -92,3 +92,23 @@ ts.recordRedemption(40n, Date.now() - 8 * 86_400_000); // older than 7 days -> p
 assert(Math.abs(ts.rollingRedeemRatio(Date.now()) - 0.5) < 1e-9, 'stale redemptions fall out of the window');
 
 console.log('✅ tau governor rolling-window test passed');
+
+// --- audit fixes: season counter (no re-mint) + atomic refund -------------
+const S = store.createWallet('WALLET_SEASON');
+store.grantSeasonLumen(S.id, 2); // tiers 1+2 -> 2 * 10
+assert(store.getLumen(S.id) === 20, 'season grants newly-crossed tiers');
+store.grantSeasonLumen(S.id, 2); // same tier -> nothing (no re-mint, even after key pruning)
+assert(store.getLumen(S.id) === 20, 'season never re-mints a claimed tier');
+store.grantSeasonLumen(S.id, 3); // +1 tier -> +10
+assert(store.getLumen(S.id) === 30, 'season grants only the delta');
+
+const RF = store.createWallet('WALLET_REFUND');
+const rnow = Date.now() + 9 * 86_400_000; // age past the 7-day hold
+store.grantLumen(RF.id, 30, 'test');
+assert(store.commitRedeem(RF.id, 20, rnow) === true, 'commitRedeem consumes + charges the cap');
+assert(store.redeemUsage(RF.id, rnow).dailyUsed === 20, 'cap usage charged');
+store.refundRedeem(RF.id, 20, rnow); // failed payout -> full undo
+assert(store.getLumen(RF.id) === 30, 'refund re-grants the LUMEN');
+assert(store.redeemUsage(RF.id, rnow).dailyUsed === 0, 'refund rolls back the cap usage');
+
+console.log('✅ audit-fix tests passed (season counter, atomic refund)');

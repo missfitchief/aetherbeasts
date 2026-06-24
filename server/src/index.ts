@@ -13,6 +13,7 @@ import { payoutAether } from './payout.js';
 import { MatchManager } from './match.js';
 
 const store = new Store();
+const redeemInFlight = new Set<string>(); // serialize cash-outs per player (closes the redeem TOCTOU)
 
 interface Session {
   playerId: string;
@@ -256,8 +257,7 @@ function bind(socket: Socket) {
     if (LUMEN_ENABLED) {
       if (qs.daily.quests.every((q) => q.claimed)) store.grantLumenOnce(id, `daily:${qs.daily.date}`, LUMEN_FAUCET.dailyQuestsCleared, 'dailies');
       if (qs.weekly.quests.every((q) => q.claimed)) store.grantLumenOnce(id, `weekly:${qs.weekly.weekStart}`, LUMEN_FAUCET.weeklyQuestsCleared, 'weeklies');
-      const tier = Math.floor(qs.seasonPoints / LUMEN_FAUCET.seasonPointStep);
-      for (let t = 1; t <= tier; t++) store.grantLumenOnce(id, `season:${t}`, LUMEN_FAUCET.seasonPointMilestone, 'season');
+      store.grantSeasonLumen(id, Math.floor(qs.seasonPoints / LUMEN_FAUCET.seasonPointStep));
       socket.emit('profile:update', publicProfile(rec));
     }
     socket.emit('quest:claimed', {
@@ -327,42 +327,49 @@ function bind(socket: Socket) {
     if (!id || !p) return;
     const fail = (reason: string) => socket.emit('exchange:result', { ok: false, reason, lumenSpent: 0, aether: 0 });
     if (!EXCHANGE_ENABLED) return fail('The Aether Exchange is not open yet.');
-    const rec = store.getById(id);
-    if (!rec || !rec.wallet) return fail('Link a wallet to cash out.');
-    const now = Date.now();
-    if (!isRedeemEligible(store.getPremiumPurchases(id), store.accountAgeDays(id, now)))
-      return fail('Not eligible yet — buy a premium pull and let your wallet age 30 days first.');
-    const requested = Math.max(0, Math.floor(Number(p.lumen) || 0));
-    const redeemable = store.redeemableLumen(id, now);
-    const { dailyUsed, weeklyUsed } = store.redeemUsage(id, now);
-    const price = await aetherUsdPrice();
-    // Re-quote server-side; the client's numbers are NEVER trusted for a payout.
-    const q = redeemQuote({
-      lumenRequested: Math.min(requested, redeemable),
-      aetherPriceUsd: price, aetherDecimals: AETHER_DECIMALS, rollingRatio: store.rollingRedeemRatio(now),
-      dailyUsedLumen: dailyUsed, weeklyUsedLumen: weeklyUsed, poolBaseUnits: store.getRewardsPool(),
-    });
-    if (!q.ok) {
-      return fail(q.reason === 'pool_low' ? 'The Rewards Pool is replenishing — try again later.'
-        : q.reason === 'cap' ? 'Daily/weekly cash-out cap reached.' : 'Nothing redeemable yet.');
+    // Serialize cash-outs per player: without this, two concurrent redeems both read
+    // redeemable/usage BEFORE either commits and slip past the caps (TOCTOU).
+    if (redeemInFlight.has(id)) return fail('A cash-out is already in progress — give it a moment.');
+    redeemInFlight.add(id);
+    try {
+      const rec = store.getById(id);
+      if (!rec || !rec.wallet) return fail('Link a wallet to cash out.');
+      const now = Date.now();
+      if (!isRedeemEligible(store.getPremiumPurchases(id), store.accountAgeDays(id, now)))
+        return fail('Not eligible yet — buy a premium pull and let your wallet age 30 days first.');
+      const requested = Math.max(0, Math.floor(Number(p.lumen) || 0));
+      const redeemable = store.redeemableLumen(id, now);
+      const { dailyUsed, weeklyUsed } = store.redeemUsage(id, now);
+      const price = await aetherUsdPrice();
+      // Re-quote server-side; the client's numbers are NEVER trusted for a payout.
+      const q = redeemQuote({
+        lumenRequested: Math.min(requested, redeemable),
+        aetherPriceUsd: price, aetherDecimals: AETHER_DECIMALS, rollingRatio: store.rollingRedeemRatio(now),
+        dailyUsedLumen: dailyUsed, weeklyUsedLumen: weeklyUsed, poolBaseUnits: store.getRewardsPool(),
+      });
+      if (!q.ok) {
+        return fail(q.reason === 'pool_low' ? 'The Rewards Pool is replenishing — try again later.'
+          : q.reason === 'cap' ? 'Daily/weekly cash-out cap reached.' : 'Nothing redeemable yet.');
+      }
+      // Reserve (consume LUMEN + charge caps, then debit the pool) BEFORE paying.
+      if (!store.commitRedeem(id, q.acceptedLumen, now)) return fail('Insufficient redeemable LUMEN.');
+      if (!store.debitRewardsPool(q.aetherBaseUnits)) {
+        store.refundRedeem(id, q.acceptedLumen, now); // pool moved under us — undo LUMEN + cap usage
+        return fail('The Rewards Pool is replenishing — try again later.');
+      }
+      const pay = await payoutAether(rec.wallet, q.aetherBaseUnits);
+      if (!pay.ok) {
+        // Nothing left the treasury — fully undo: LUMEN + cap usage + the pool debit.
+        store.refundRedeem(id, q.acceptedLumen, now);
+        store.addRewardsPool(q.aetherBaseUnits);
+        return fail(pay.reason ?? 'Payout failed — your LUMEN was refunded.');
+      }
+      store.recordRedemption(q.aetherBaseUnits, now); // feed the tau governor's rolling 7-day window
+      socket.emit('exchange:result', { ok: true, sig: pay.sig, lumenSpent: q.acceptedLumen, aether: Number(q.aetherBaseUnits) / DECIMALS_POW });
+      socket.emit('profile:update', publicProfile(rec));
+    } finally {
+      redeemInFlight.delete(id);
     }
-    // Reserve atomically (consume LUMEN, debit the pool) BEFORE paying. The pool debit
-    // re-checks payout <= pool, so a concurrent redeem can't oversell it.
-    if (!store.commitRedeem(id, q.acceptedLumen, now)) return fail('Insufficient redeemable LUMEN.');
-    if (!store.debitRewardsPool(q.aetherBaseUnits)) {
-      store.grantLumen(id, q.acceptedLumen, 'redeem_refund'); // pool moved under us — give the LUMEN back
-      return fail('The Rewards Pool is replenishing — try again later.');
-    }
-    const pay = await payoutAether(rec.wallet, q.aetherBaseUnits);
-    if (!pay.ok) {
-      // Nothing left the treasury — refund BOTH reservations.
-      store.grantLumen(id, q.acceptedLumen, 'redeem_refund');
-      store.addRewardsPool(q.aetherBaseUnits);
-      return fail(pay.reason ?? 'Payout failed — your LUMEN was refunded.');
-    }
-    store.recordRedemption(q.aetherBaseUnits, now); // feed the tau governor's rolling 7-day window
-    socket.emit('exchange:result', { ok: true, sig: pay.sig, lumenSpent: q.acceptedLumen, aether: Number(q.aetherBaseUnits) / DECIMALS_POW });
-    socket.emit('profile:update', publicProfile(rec));
   });
 
   socket.on('disconnect', () => {
