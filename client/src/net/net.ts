@@ -344,8 +344,8 @@ export async function connectWallet() {
   if (walletConnecting) return; // ignore rapid double-clicks
   walletConnecting = true;
   try {
-    const { connectPhantom } = await import('./wallet.js');
-    const w = await connectPhantom();
+    const { connectWallet } = await import('./wallet.js');
+    const w = await connectWallet();
     const s = ensureSocket();
     if (!s.connected) await new Promise<void>((res) => s.once('connect', () => res()));
     s.off('auth:challenge');

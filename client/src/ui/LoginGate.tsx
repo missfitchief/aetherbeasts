@@ -13,7 +13,7 @@ const TOKEN_KEY = 'aetherbeasts:nettoken';
 export function LoginGate() {
   const socketReady = useNet((s) => s.socketReady); // transport reachable (≠ authenticated)
   const authFailed = useNet((s) => s.authFailed);
-  const hasPhantom = typeof window !== 'undefined' && !!window.solana?.isPhantom;
+  const hasWallet = typeof window !== 'undefined' && !!(window.solana?.isPhantom || window.solflare?.isSolflare || window.solana || window.solflare);
   const [phase, setPhase] = useState<'checking' | 'idle' | 'connecting'>('checking');
 
   // Only briefly wait for an auto-resume if we actually have a token to try.
@@ -52,10 +52,11 @@ export function LoginGate() {
 
         {checking ? (
           <div className="login-status"><span className="spinner" /> Resuming your session…</div>
-        ) : !hasPhantom ? (
+        ) : !hasWallet ? (
           <>
             <a className="btn big gold" href="https://phantom.app/download" target="_blank" rel="noreferrer">Install Phantom →</a>
-            <div className="muted small" style={{ marginTop: 8 }}>No Solana wallet detected. Install Phantom, then refresh.</div>
+            <a className="btn" href="https://solflare.com/download" target="_blank" rel="noreferrer" style={{ marginTop: 8 }}>Install Solflare →</a>
+            <div className="muted small" style={{ marginTop: 8 }}>No Solana wallet detected. Install Phantom or Solflare, then refresh.</div>
           </>
         ) : !socketReady ? (
           <>
@@ -64,7 +65,7 @@ export function LoginGate() {
           </>
         ) : (
           <button className="btn big gold" disabled={phase === 'connecting'} onClick={onConnect}>
-            {phase === 'connecting' ? 'Check Phantom to sign…' : '🦊 Connect Phantom'}
+            {phase === 'connecting' ? 'Approve in your wallet…' : '🦊 Connect Wallet'}
           </button>
         )}
       </div>
