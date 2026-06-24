@@ -44,7 +44,7 @@ export function LoginGate() {
       </div>
 
       <div className="login-card">
-        <div className="login-head">🦊 Connect your wallet to play</div>
+        <div className="login-head">👛 Connect your wallet to play</div>
         <p className="muted small">
           Aetherbeasts is a Solana game — your beasts, progress and Battle Credits live with your wallet.
           Connecting is free and off-chain (you just sign a message; no transaction).
@@ -65,7 +65,7 @@ export function LoginGate() {
           </>
         ) : (
           <button className="btn big gold" disabled={phase === 'connecting'} onClick={onConnect}>
-            {phase === 'connecting' ? 'Approve in your wallet…' : '🦊 Connect Wallet'}
+            {phase === 'connecting' ? 'Approve in your wallet…' : '👛 Connect Wallet'}
           </button>
         )}
       </div>

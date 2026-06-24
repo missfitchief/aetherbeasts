@@ -293,8 +293,8 @@ export function buildWorld(): WorldMap {
   const npcs: Npc[] = [
     { id: 'prof', kind: 'professor', x: 34, y: 12, facing: 'down', sheet: 'sheet_professor' },   // by the Lab
     { id: 'shop', kind: 'shopkeeper', x: 28, y: 12, facing: 'down', sheet: 'sheet_guy' },         // by the Shop
-    { id: 'kid', kind: 'villager', x: 15, y: 15, facing: 'down', sheet: 'sheet_villager_a' },
-    { id: 'wanderer', kind: 'villager', x: 24, y: 34, facing: 'left', sheet: 'sheet_villager_b' },
+    { id: 'kid', kind: 'villager', x: 15, y: 15, facing: 'down', sheet: 'sheet_schoolgirl' },
+    { id: 'wanderer', kind: 'villager', x: 24, y: 34, facing: 'left', sheet: 'sheet_hiker' },
     // Whisperwood trainers (on the open grass beside the central path) + the Warden boss.
     { id: 'tr_w1', kind: 'trainer', x: 25, y: 33, facing: 'down', sheet: 'sheet_hiker', trainerId: 't_whisper_1' },
     { id: 'tr_w2', kind: 'trainer', x: 20, y: 38, facing: 'down', sheet: 'sheet_schoolgirl', trainerId: 't_whisper_2' },
@@ -395,7 +395,7 @@ function buildInterior(b: BuildingDef): WorldMap {
   } else {
     obj('bed', 2, 3); obj('bookshelf', 4, 2); obj('painting', 8, 1);
     obj('table', 8, 5); obj('chair', 9, 5); obj('pot', 11, 7); obj('rug', 6, 6);
-    npcs.push({ id: 'resident', kind: 'villager', x: 5, y: 4, facing: 'down', sheet: 'sheet_villager_c', lines: ['Oh, a visitor! Make yourself at home.', 'They say the Aether Rift in the Lab summons beasts you can’t find in the grass.'] });
+    npcs.push({ id: 'resident', kind: 'villager', x: 5, y: 4, facing: 'down', sheet: 'sheet_hiker', lines: ['Oh, a visitor! Make yourself at home.', 'They say the Aether Rift in the Lab summons beasts you can’t find in the grass.'] });
   }
 
   return {

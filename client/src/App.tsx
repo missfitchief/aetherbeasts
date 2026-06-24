@@ -13,7 +13,6 @@ import { TouchControls } from './ui/TouchControls.js';
 import { SocialControls } from './ui/SocialControls.js';
 import { ChatBox } from './ui/ChatBox.js';
 import { LoginGate } from './ui/LoginGate.js';
-import { CharacterCreator } from './ui/CharacterCreator.js';
 import { startNet } from './net/net.js';
 import { useNet } from './net/net.js';
 
@@ -23,7 +22,6 @@ let questPopupShown = false;
 
 export function App() {
   const screen = useGame((s) => s.screen);
-  const save = useGame((s) => s.save);
   const wallet = useNet((s) => s.wallet); // null until signed in with a wallet
   const questView = useNet((s) => s.questView);
 
@@ -58,17 +56,6 @@ export function App() {
     return (
       <div className="app">
         <LoginGate />
-        <Toast />
-      </div>
-    );
-  }
-
-  // First-login character creator — once the player has begun, before the game
-  // mounts, let them design their avatar (shown until an appearance is saved).
-  if (save && save.appearance == null && (screen === 'starter' || screen === 'playing')) {
-    return (
-      <div className="app">
-        <CharacterCreator />
         <Toast />
       </div>
     );
