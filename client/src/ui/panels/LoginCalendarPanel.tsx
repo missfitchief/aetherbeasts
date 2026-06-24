@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useNet } from '../../net/net.js';
 import { loginClaim } from '../../net/net.js';
 import { useGame } from '../../state/store.js';
@@ -8,6 +9,21 @@ export function LoginCalendarPanel() {
   const closePanel = useGame((s) => s.closePanel);
   const qv = useNet((s) => s.questView);
   const login = qv?.login;
+  // Captured at click time (the cycle advances once the server confirms).
+  const [claimedLabel, setClaimedLabel] = useState<string | null>(null);
+
+  // Show the "Claimed!" confirmation briefly, then close the modal on its own.
+  useEffect(() => {
+    if (claimedLabel === null) return;
+    const t = setTimeout(closePanel, 1500);
+    return () => clearTimeout(t);
+  }, [claimedLabel, closePanel]);
+
+  const onClaim = () => {
+    if (!login?.claimableToday || claimedLabel !== null) return;
+    setClaimedLabel(login.rewards[login.cycleDay] ?? 'your reward');
+    loginClaim();
+  };
 
   return (
     <Modal title="🗓️ Daily Login" onClose={closePanel}>
@@ -21,7 +37,8 @@ export function LoginCalendarPanel() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 5, margin: '6px 0 12px' }}>
             {login.rewards.map((label, i) => {
               const day = i + 1;
-              const claimed = day <= login.cycleDay;
+              // While the confirmation shows, light up the day we just claimed too.
+              const claimed = day <= login.cycleDay || (claimedLabel !== null && day === login.cycleDay + 1);
               const day7 = day === 7;
               return (
                 <div
@@ -42,9 +59,18 @@ export function LoginCalendarPanel() {
               );
             })}
           </div>
-          <button className="btn big gold" disabled={!login.claimableToday} onClick={() => loginClaim()}>
-            {login.claimableToday ? "✦ Claim today's reward!" : 'Come back tomorrow'}
-          </button>
+
+          {claimedLabel !== null ? (
+            <div style={{ textAlign: 'center', padding: '4px 0 2px' }}>
+              <div style={{ fontSize: 30, lineHeight: 1, color: '#53d769' }}>✓</div>
+              <div style={{ color: '#53d769', fontWeight: 700 }}>Claimed!</div>
+              <div className="small muted">{claimedLabel}</div>
+            </div>
+          ) : (
+            <button className="btn big gold" disabled={!login.claimableToday} onClick={onClaim}>
+              {login.claimableToday ? "✦ Claim today's reward!" : 'Come back tomorrow'}
+            </button>
+          )}
         </div>
       )}
     </Modal>
