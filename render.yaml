@@ -8,9 +8,8 @@ services:
   - type: web
     name: aetherbeasts-server
     runtime: node
-    plan: free # free to start (no card). NOTE: free instances sleep after ~15 min idle
-               # and cold-start in ~30-60s; a live battle can drop if it sleeps. Upgrade
-               # to "starter" (always-warm, $7/mo) for production once you have traffic.
+    plan: starter # always-warm ($7/mo) — no cold-start delay. (Free sleeps after ~15 min
+                  # idle and wakes in ~50s, which breaks launch-day traffic + live battles.)
     region: oregon
     rootDir: .
     buildCommand: npm install --include=dev
@@ -39,6 +38,19 @@ services:
       #   value: "0.00005"   # set near your launch price
       # - key: SOLANA_RPC
       #   value: "<a paid mainnet RPC — Helius/QuickNode>"
+      # --- LUMEN cash-out economy (set these to open the Aether Exchange) ---
+      # - key: LUMEN_ENABLED
+      #   value: "true"
+      # - key: EXCHANGE_ENABLED
+      #   value: "true"   # the cash-out kill-switch — flip to false to pause payouts instantly
+      # - key: REWARDS_POOL_SEED_AETHER
+      #   value: "<amount of $AETHER you sent to the treasury to seed payouts>"
+      # - key: PAYOUT_MAX_PER_TX_AETHER
+      #   value: "0"      # 0 = no cap; set a ceiling for defense-in-depth
+      # - key: PAYOUT_MAX_PER_DAY_AETHER
+      #   value: "0"
+      # - key: TREASURY_SECRET_KEY
+      #   sync: false     # SECRET — set the treasury signing key in the dashboard, NEVER in this file
       # IMPORTANT: without this, accounts/saves live only in memory and are LOST on
       # every restart, redeploy, or free-tier sleep. Set the value in the Render
       # dashboard to a Postgres connection string — a FREE Neon (neon.tech) or
