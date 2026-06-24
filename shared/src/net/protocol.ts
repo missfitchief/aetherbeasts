@@ -72,6 +72,7 @@ export interface AuthOk {
   save: SaveData | null;  // server-stored progression (null => client uploads its local save)
   serverNow: number;
   onchainSummon: boolean; // is the on-chain $AETHER gacha live (mint+treasury set)?
+  exchangeEnabled: boolean; // is the LUMEN -> $AETHER Exchange (cash-out) open?
 }
 
 // ---- battle views (always rendered from the recipient's perspective) -------

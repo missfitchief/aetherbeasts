@@ -1,4 +1,5 @@
 import { useGame } from '../../state/store.js';
+import { useNet } from '../../net/net.js';
 import { dexCounts } from '@aether/shared';
 import { Modal } from '../Panels.js';
 
@@ -9,6 +10,7 @@ export function MenuPanel() {
   const setScreen = useGame((s) => s.setScreen);
   const showToast = useGame((s) => s.showToast);
   const save = useGame((s) => s.save);
+  const exchangeEnabled = useNet((s) => s.exchangeEnabled);
   if (!save) return null;
   const dc = dexCounts(save);
 
@@ -18,6 +20,7 @@ export function MenuPanel() {
     { emoji: '🎁', label: 'Daily Login', sub: 'Reward', onClick: () => openPanel('login') },
     { emoji: '📣', label: 'Share', sub: 'My team', onClick: () => openPanel('share') },
     { emoji: '✦', label: 'Aether Rift', sub: 'Summon', onClick: () => openPanel('summon') },
+    ...(exchangeEnabled ? [{ emoji: '◆', label: 'Aether Exchange', sub: 'Cash out LUMEN', onClick: () => openPanel('exchange') }] : []),
     { emoji: '🎒', label: 'Bag', onClick: () => openPanel('bag') },
     { emoji: '📖', label: 'Aether-Dex', sub: `${dc.caught}/${dc.total}`, onClick: () => openPanel('dex') },
     { emoji: '🌀', label: 'Spirit Realm', sub: 'Storage', onClick: () => openPanel('box') },

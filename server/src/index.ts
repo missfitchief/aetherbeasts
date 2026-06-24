@@ -59,6 +59,7 @@ function authOk(socket: Socket, rec: PlayerRecord) {
     save: fresh.save,
     serverNow: Date.now(),
     onchainSummon: ONCHAIN_SUMMON_ENABLED,
+    exchangeEnabled: EXCHANGE_ENABLED,
   });
   if (!bound.has(socket.id)) {
     bind(socket);

@@ -24,6 +24,7 @@ export function Hud() {
   const panel = useGame((s) => s.panel);
   const profile = useNet((s) => s.profile);
   const balance = useNet((s) => s.balance);
+  const exchangeEnabled = useNet((s) => s.exchangeEnabled);
   const online = useNet((s) => s.status === 'online');
   const setArena = useNet((s) => s.setArena);
   const [, setTick] = useState(0);
@@ -46,6 +47,7 @@ export function Hud() {
       <div className="pill">{inside ? '🚪 Indoors' : `🧭 ${inForest ? 'Whisperwood Route' : 'Aether Town'}`}</div>
       {inside && <div className="pill esc-hint">⎋ Press ESC to leave</div>}
       <div className="pill">◈ {save.aether.toLocaleString()} GLINT</div>
+      {exchangeEnabled && profile && <div className="pill" title="LUMEN — the cashable token; trade for $AETHER at the Exchange">◆ {profile.lumen.toLocaleString()} LUMEN</div>}
       {profile && <div className="pill" title="Battle Credits — staked in PvP, never cashed out">⚔ {profile.credits.toLocaleString()} BC</div>}
       {balance && <div className="pill" title={`On-chain $AETHER balance (${balance.mode})`}>⛓ {balance.amount.toLocaleString()} {balance.mode === 'sim' ? '$AETHER·sim' : '$AETHER'}</div>}
       <div className={'pill wild-pill' + (wildReady ? ' ready' : '')} title="A wild beast is roaming the grass when ready; encounter it to reset the timer.">

@@ -13,6 +13,8 @@ import type {
   SummonReport,
   QuestView,
   QuestProgressEvent,
+  ExchangeQuote,
+  ExchangeResult,
 } from '@aether/shared';
 import { DEFAULT_STAKE, addItem } from '@aether/shared';
 import { useGame } from '../state/store.js';
@@ -62,6 +64,10 @@ interface NetState {
   summonReport: SummonReport | null;
   /** Authoritative daily/weekly quest board (null until the server sends it). */
   questView: QuestView | null;
+  /** The LUMEN -> $AETHER Exchange (cash-out) — open only when the server enables it. */
+  exchangeEnabled: boolean;
+  exchangeQuote: ExchangeQuote | null;
+  exchangeBusy: boolean;
   setArena: (open: boolean) => void;
   setStake: (n: number) => void;
   clearSummonReport: () => void;
@@ -88,6 +94,9 @@ export const useNet = create<NetState>((set) => ({
   summonPhase: 'idle',
   summonReport: null,
   questView: null,
+  exchangeEnabled: false,
+  exchangeQuote: null,
+  exchangeBusy: false,
   setArena: (open) => set({ arenaOpen: open }),
   setStake: (n) => set({ stake: n }),
   clearSummonReport: () => set({ summonReport: null }),
@@ -170,7 +179,7 @@ function wire(s: Socket) {
 
   s.on('auth:ok', (p: AuthOk) => {
     localStorage.setItem(TOKEN_KEY, p.token);
-    useNet.setState({ status: 'online', socketReady: true, authFailed: false, profile: p.profile, wallet: p.profile.wallet, onchainSummon: p.onchainSummon });
+    useNet.setState({ status: 'online', socketReady: true, authFailed: false, profile: p.profile, wallet: p.profile.wallet, onchainSummon: p.onchainSummon, exchangeEnabled: p.exchangeEnabled });
 
     // Only reconcile the save on the first auth or an explicit wallet sign-in.
     const explicit = !firstAuthDone || walletLoginPending;
@@ -221,6 +230,11 @@ function wire(s: Socket) {
   });
   s.on('save:saved', () => {});
   s.on('profile:update', (p: PublicProfile) => useNet.setState({ profile: p, wallet: p.wallet }));
+  s.on('exchange:quoted', (q: ExchangeQuote) => useNet.setState({ exchangeQuote: q, exchangeBusy: false }));
+  s.on('exchange:result', (r: ExchangeResult) => {
+    useNet.setState({ exchangeBusy: false, exchangeQuote: null });
+    toast(r.ok ? `Cashed out ${r.lumenSpent} LUMEN → ${r.aether.toLocaleString(undefined, { maximumFractionDigits: 4 })} $AETHER.` : (r.reason ?? 'Cash-out failed.'));
+  });
   s.on('balance:aether', (b: AetherBalance) => useNet.setState({ balance: b }));
 
   s.on('match:queued', () => useNet.setState({ lobby: 'queued', note: null }));
@@ -438,6 +452,15 @@ export function loginClaim() {
 /** Ask the server for the current quest board (e.g. on opening the panel). */
 export function refreshQuests() {
   if (socket?.connected) socket.emit('quest:request');
+}
+
+/** Ask the Aether Exchange for a LUMEN -> $AETHER cash-out quote. */
+export function quoteExchange(lumen: number) {
+  if (socket?.connected) { useNet.setState({ exchangeBusy: true }); socket.emit('exchange:quote', { lumen }); }
+}
+/** Redeem LUMEN for $AETHER (the server re-quotes + verifies before paying). */
+export function redeemExchange(lumen: number) {
+  if (socket?.connected) { useNet.setState({ exchangeBusy: true }); socket.emit('exchange:redeem', { lumen }); }
 }
 
 let summonWatchdog: ReturnType<typeof setTimeout> | null = null;
