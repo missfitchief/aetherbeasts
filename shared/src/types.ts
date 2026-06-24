@@ -173,8 +173,26 @@ export interface SaveData {
   defeatedTrainers: string[];
   /** UTC date the Daily Boss was last beaten (empty = never / available). */
   lastDailyBoss: string;
+  /** Player avatar chosen in the first-login character creator (null until created). */
+  appearance: CharacterAppearance | null;
   createdAt: number;
   updatedAt: number;
 }
 
 export type Direction = 'up' | 'down' | 'left' | 'right';
+
+/** RGB triple, 0-255. */
+export type RGB = [number, number, number];
+
+/** A customizable overworld avatar — drives the procedural walk-sheet generator
+ *  (client/src/game/world/characterart.ts) for both the player and NPCs. */
+export interface CharacterAppearance {
+  skin: RGB;
+  hair: RGB;
+  hairStyle: 'short' | 'long' | 'spiky' | 'bald';
+  top: RGB;
+  bottom: RGB;
+  shoe: RGB;
+  hat: 'none' | 'cap';
+  hatColor: RGB;
+}

@@ -14,16 +14,11 @@ import { monSpriteUrl, assetUrl } from '../assets.js';
 import { generateTileArt } from '../world/tileart.js';
 import { bakeTerrain } from '../world/autotile.js';
 import { generateObjectArt } from '../world/objectart.js';
+import { registerCharSheet } from '../world/charsheet.js';
+import { NPC_LOOKS } from '../world/characterart.js';
 
 // Real 4x4 walk sheets: rows = direction (right/up/left/down), cols = walk frame.
 const DIR_ROW: Record<Direction, number> = { right: 0, up: 1, left: 2, down: 3 };
-const CHAR_FILES: [string, string][] = [
-  ['sheet_player', 'char/char_player_sheet.png'],
-  ['sheet_professor', 'char/char_professor_sheet.png'],
-  ['sheet_hiker', 'char/char_hiker_sheet.png'],
-  ['sheet_schoolgirl', 'char/char_schoolgirl_sheet.png'],
-  ['sheet_guy', 'char/char_guy_sheet.png'],
-];
 const idleFrame = (d: Direction) => DIR_ROW[d] * 4;
 const EMOTE_EMOJI: Record<string, string> = { wave: '👋', happy: '😄', surprised: '😯', fire: '🔥', heart: '❤️', cry: '😢', gg: '🏆', sleep: '😴' };
 const BUBBLE_STYLE: Phaser.Types.GameObjects.Text.TextStyle = { fontSize: '12px', color: '#ffffff', backgroundColor: 'rgba(13,21,38,0.85)', padding: { x: 4, y: 2 } };
@@ -78,6 +73,8 @@ export class OverworldScene extends Phaser.Scene {
   private npcSprites = new Map<string, Phaser.GameObjects.Sprite>();
   private remotePlayers = new Map<string, { c: Phaser.GameObjects.Container; spr: Phaser.GameObjects.Sprite; bubble?: Phaser.GameObjects.Text; tween?: Phaser.Tweens.Tween }>();
   private myId = '';
+  /** Texture key for the local player's avatar ('sheet_me' if customized, else default). */
+  private playerSheet = 'sheet_player';
   /** Everything drawn for the current map, so it can be cleared on a warp. */
   private mapGfx: Phaser.GameObjects.GameObject[] = [];
   private inForest = false;
@@ -95,25 +92,15 @@ export class OverworldScene extends Phaser.Scene {
     if (this.textures.exists('mon_drachnid')) return; // assets persist across scene restarts
     for (const id of SPECIES_ORDER) this.load.image(`mon_${id}`, monSpriteUrl(id));
     this.load.image('ui_catchball', assetUrl('ui/ui_catchball.png'));
-    // Character walk sheets (16px frames). Terrain is hand-authored (tileart.ts).
-    for (const [key, file] of CHAR_FILES) {
-      this.load.spritesheet(key, assetUrl(file), { frameWidth: 16, frameHeight: 16 });
-    }
+    // Character walk-sheets are generated procedurally in create() (charsheet.ts), not loaded.
   }
 
-  private buildAnims(): void {
-    for (const [sheet] of CHAR_FILES) {
-      (['right', 'up', 'left', 'down'] as Direction[]).forEach((dir) => {
-        const key = `${sheet}_${dir}`;
-        if (this.anims.exists(key)) return;
-        this.anims.create({
-          key,
-          frames: this.anims.generateFrameNumbers(sheet, { start: DIR_ROW[dir] * 4, end: DIR_ROW[dir] * 4 + 3 }),
-          frameRate: 8,
-          repeat: -1,
-        });
-      });
-    }
+  /** Generate procedural walk-sheets for every NPC look + the player's avatar. */
+  private setupCharacters(): void {
+    for (const key of Object.keys(NPC_LOOKS)) registerCharSheet(this, key, NPC_LOOKS[key]);
+    const ap = useGame.getState().save?.appearance;
+    if (ap) { registerCharSheet(this, 'sheet_me', ap); this.playerSheet = 'sheet_me'; }
+    else this.playerSheet = 'sheet_player';
   }
 
   create(): void {
@@ -127,7 +114,7 @@ export class OverworldScene extends Phaser.Scene {
         repeat: -1,
       });
     }
-    this.buildAnims();
+    this.setupCharacters();
     const save = useGame.getState().save!;
     this.mapGfx = [];
     this.world = getMap(save.position?.map ?? 'world');
@@ -140,7 +127,7 @@ export class OverworldScene extends Phaser.Scene {
     this.ty = save.position?.y ?? this.world.spawn.y;
     this.facing = save.position?.facing ?? 'down';
 
-    this.player = this.add.sprite(0, 0, 'sheet_player', idleFrame(this.facing)).setOrigin(0.5, 0.85);
+    this.player = this.add.sprite(0, 0, this.playerSheet, idleFrame(this.facing)).setOrigin(0.5, 0.85);
     this.placePlayer();
 
     // Live presence: render other players on this map + announce ourselves.
@@ -450,7 +437,7 @@ export class OverworldScene extends Phaser.Scene {
     }
     this.moving = true;
     // play() with ignoreIfPlaying keeps the walk cycle smooth across tiles
-    this.player.anims.play(`sheet_player_${dir}`, true);
+    this.player.anims.play(`${this.playerSheet}_${dir}`, true);
     this.tweens.add({
       targets: this.player,
       x: nx * TILE + TILE / 2,
