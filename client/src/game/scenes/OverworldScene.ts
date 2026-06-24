@@ -696,8 +696,18 @@ export class OverworldScene extends Phaser.Scene {
       useDialogue(['The Daily Champion rests, already bested today.', 'Return tomorrow for a fresh challenge.']);
       return;
     }
-    audio.sfx('sfx_ok', 0.4);
     const boss = dailyBossOf(today);
+    // The altar sits near spawn, but the champion is Lv 25-39 — don't throw a fresh
+    // trainer into a hopeless fight. Gate it so you must be within striking range.
+    const partyTop = save.party.length ? Math.max(...save.party.map((c) => c.level)) : 0;
+    if (partyTop < boss.level - 5) {
+      useDialogue([
+        `The altar shows today's Daily Champion: a Lv ${boss.level} ${getSpecies(boss.species).name}.`,
+        `Far too strong for your team (Lv ${partyTop}). Train up and return when you're closer to its level.`,
+      ]);
+      return;
+    }
+    audio.sfx('sfx_ok', 0.4);
     useDialogue(
       ['A fearsome Daily Champion appears!', `Best it for a ${DAILY_BOSS_REWARD} ◈ bounty — once per day.`],
       () => this.startDailyBoss(boss),
