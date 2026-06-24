@@ -47,6 +47,7 @@ interface Match {
   pending: Map<string, PlayerAction>; // playerId -> action chosen for current turn
   turn: number; // 1-based turn currently awaiting actions
   done: boolean;
+  forfeited?: boolean; // a player ran/forfeited — the resulting win must NOT pay ranked LUMEN (anti self-match farm)
 }
 
 interface Waiting {
@@ -208,6 +209,7 @@ export class MatchManager {
     if (!match || match.done) return;
     const ms = this.sideOf(match, playerId);
     if (!ms) return;
+    match.forfeited = true; // exclude the opponent's win from ranked LUMEN
     match.pending.set(playerId, { kind: 'run' });
     // opponent's pending is irrelevant — 'run' short-circuits resolution
     const opp = ms === match.a ? match.b : match.a;
@@ -293,8 +295,9 @@ export class MatchManager {
     this.store.award(match.b.id, bGain);
     this.store.recordResult(match.a.id, aOut, aRD);
     this.store.recordResult(match.b.id, bOut, bRD);
-    this.bumpPvpWin(match.a, aOut);
-    this.bumpPvpWin(match.b, bOut);
+    const lumenOk = !match.forfeited; // forfeit/run wins don't pay cashable LUMEN
+    this.bumpPvpWin(match.a, aOut, lumenOk);
+    this.bumpPvpWin(match.b, bOut, lumenOk);
 
     this.sendOver(match, match.a, aOut, aGain);
     this.sendOver(match, match.b, bOut, bGain);
@@ -303,10 +306,10 @@ export class MatchManager {
   }
 
   /** A PvP win authoritatively advances the player's pvp_win quests. */
-  private bumpPvpWin(ms: MatchSide, outcome: Outcome) {
+  private bumpPvpWin(ms: MatchSide, outcome: Outcome, lumenEligible: boolean) {
     if (outcome !== 'win') return;
     const now = Date.now();
-    if (LUMEN_ENABLED) this.store.grantRankedWinLumen(ms.id, now); // ranked LUMEN drip (daily-capped)
+    if (LUMEN_ENABLED && lumenEligible) this.store.grantRankedWinLumen(ms.id, now); // ranked LUMEN drip (daily-capped; not on forfeits)
     const qs = this.store.getQuests(ms.id, now);
     if (qs && applyProgress(qs, 'pvp_win', 1)) {
       this.store.saveQuests(ms.id);

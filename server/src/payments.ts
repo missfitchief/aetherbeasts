@@ -1,4 +1,4 @@
-import { AETHER_MINT, TREASURY_ADDRESS, SOLANA_RPC, ONCHAIN_SUMMON_ENABLED } from './config.js';
+import { AETHER_MINT, TREASURY_ADDRESS, SOLANA_RPC, ONCHAIN_SUMMON_ENABLED, TOKEN_MODE } from './config.js';
 import type { Store } from './store.js';
 
 /**
@@ -99,4 +99,44 @@ export async function verifyAetherPayment(
   } catch {
     return { ok: false, reason: 'could not verify payment, try again' };
   }
+}
+
+// --- on-chain wallet age (Exchange eligibility, anti-sybil) -----------------
+// A wallet's first-tx time never changes, so cache it forever once known.
+const walletFirstTx = new Map<string, number>();
+
+async function fetchOldestTxTime(wallet: string): Promise<number> {
+  try {
+    const res = await fetch(SOLANA_RPC, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getSignaturesForAddress', params: [wallet, { limit: 1000 }] }),
+    });
+    const json: any = await res.json();
+    const sigs = json?.result;
+    if (!Array.isArray(sigs) || sigs.length === 0) return 0;
+    return Number(sigs[sigs.length - 1]?.blockTime ?? 0); // oldest signature in the batch
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * REAL on-chain wallet age in days (from the wallet's first transaction) — the
+ * anti-sybil half of the Exchange eligibility gate. Replaces the spoofable
+ * account-creation age. Cached. On sim/devnet the gate is bypassed (test wallets
+ * are fresh); on mainnet a fresh/unknown wallet returns 0 (fails closed). Note: a
+ * wallet with >1000 txs reads only its newest 1000, so the age is a conservative
+ * lower bound — it can under-credit a very busy wallet, never over-credit.
+ */
+export async function walletAgeDays(wallet: string | null): Promise<number> {
+  if (!wallet) return 0;
+  if (TOKEN_MODE !== 'mainnet') return 99999; // bypass for sim/devnet testing
+  let firstTs = walletFirstTx.get(wallet);
+  if (firstTs === undefined) {
+    firstTs = await fetchOldestTxTime(wallet);
+    if (firstTs > 0) walletFirstTx.set(wallet, firstTs);
+  }
+  if (!firstTs || firstTs <= 0) return 0; // unknown -> treat as brand new (fail closed)
+  return Math.max(0, (Date.now() / 1000 - firstTs) / 86_400);
 }

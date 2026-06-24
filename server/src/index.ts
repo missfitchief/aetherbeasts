@@ -7,7 +7,7 @@ import { PORT, corsOrigin, TREASURY_ADDRESS, AETHER_MINT, AETHER_DECIMALS, QUOTE
 import { Store, publicProfile, type PlayerRecord } from './store.js';
 import { buildLoginMessage, verifySignature } from './auth.js';
 import { aetherBalance } from './balance.js';
-import { verifyAetherPayment } from './payments.js';
+import { verifyAetherPayment, walletAgeDays } from './payments.js';
 import { summonAetherQuote, aetherUsdPrice } from './pricefeed.js';
 import { payoutAether } from './payout.js';
 import { MatchManager } from './match.js';
@@ -306,7 +306,7 @@ function bind(socket: Socket) {
     const requested = Math.max(0, Math.floor(Number(p.lumen) || 0));
     const redeemable = store.redeemableLumen(id, now);
     const { dailyUsed, weeklyUsed } = store.redeemUsage(id, now);
-    const eligible = isRedeemEligible(store.getPremiumPurchases(id), store.accountAgeDays(id, now));
+    const eligible = isRedeemEligible(store.getPremiumPurchases(id), await walletAgeDays(rec.wallet));
     const price = await aetherUsdPrice();
     const q = redeemQuote({
       lumenRequested: Math.min(requested, redeemable),
@@ -335,7 +335,7 @@ function bind(socket: Socket) {
       const rec = store.getById(id);
       if (!rec || !rec.wallet) return fail('Link a wallet to cash out.');
       const now = Date.now();
-      if (!isRedeemEligible(store.getPremiumPurchases(id), store.accountAgeDays(id, now)))
+      if (!isRedeemEligible(store.getPremiumPurchases(id), await walletAgeDays(rec.wallet)))
         return fail('Not eligible yet — buy a premium pull and let your wallet age 30 days first.');
       const requested = Math.max(0, Math.floor(Number(p.lumen) || 0));
       const redeemable = store.redeemableLumen(id, now);
