@@ -1,5 +1,5 @@
 import type { Server, Socket } from 'socket.io';
-import { EMOTES, QUICK_CHAT, type PresencePlayer, type PresenceEnterMsg, type PresenceMoveMsg, type Emote } from '@aether/shared';
+import { EMOTES, type PresencePlayer, type PresenceEnterMsg, type PresenceMoveMsg, type Emote } from '@aether/shared';
 
 /**
  * Live overworld presence — ephemeral, broadcast within a map only. Each player is
@@ -14,9 +14,20 @@ function clampCoord(n: number): number {
   return Number.isFinite(n) ? Math.max(-5, Math.min(300, Math.round(n))) : 0;
 }
 
+/** Strip control characters (codes < 32 and DEL) without regex escapes. */
+function sanitizeText(s: string): string {
+  let out = '';
+  for (const ch of String(s ?? '')) {
+    const c = ch.charCodeAt(0);
+    out += (c >= 32 && c !== 127) ? ch : ' ';
+  }
+  return out.trim().slice(0, 160);
+}
+
 export class PresenceManager {
   private byPlayer = new Map<string, PresencePlayer>();
   private lastMove = new Map<string, number>();
+  private lastChat = new Map<string, number>();
   constructor(private io: Server) {}
 
   /** Enter (or switch to) a map: leave the old room, join the new one, exchange rosters. */
@@ -61,10 +72,17 @@ export class PresenceManager {
     this.io.to(room(rec.map)).emit('presence:emoted', { id: playerId, kind }); // include sender (own bubble)
   }
 
-  chat(playerId: string, phrase: number): void {
+  /** Free-text chat, relayed to everyone on the sender's map. Length-clamped +
+   *  rate-limited + control chars stripped. NOTE: no content moderation. */
+  chat(playerId: string, text: string): void {
     const rec = this.byPlayer.get(playerId);
-    if (!rec || !Number.isInteger(phrase) || phrase < 0 || phrase >= QUICK_CHAT.length) return; // canned only
-    this.io.to(room(rec.map)).emit('presence:said', { id: playerId, phrase }); // include sender
+    if (!rec) return;
+    const now = Date.now();
+    if (now - (this.lastChat.get(playerId) ?? 0) < 600) return; // anti-spam
+    const clean = sanitizeText(text);
+    if (!clean) return;
+    this.lastChat.set(playerId, now);
+    this.io.to(room(rec.map)).emit('presence:said', { id: playerId, name: rec.name, text: clean }); // include sender
   }
 
   leave(playerId: string): void {
@@ -73,5 +91,6 @@ export class PresenceManager {
     this.io.to(room(rec.map)).emit('presence:left', { id: playerId });
     this.byPlayer.delete(playerId);
     this.lastMove.delete(playerId);
+    this.lastChat.delete(playerId);
   }
 }

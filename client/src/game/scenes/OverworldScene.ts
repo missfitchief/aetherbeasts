@@ -3,7 +3,7 @@ import {
   ENCOUNTER_ZONES, scaledWildLevel, createCreature, weightedPick, defaultRng, getSpecies, SPECIES_ORDER,
   pendingEvolution, evolve, displayName, wildCount, consumeWild,
   hasBadge, isTrainerDefeated, markTrainerDefeated, awardBadge, getTrainer,
-  dailyBossOf, DAILY_BOSS_REWARD, QUICK_CHAT,
+  dailyBossOf, DAILY_BOSS_REWARD,
   type Creature, type Direction, type Trainer,
 } from '@aether/shared';
 import { getMap, TILE, ROUTE_START_Y, OBJ_DEF, type WorldMap, type Tile, type Npc, type Interactable } from '../world/maps.js';
@@ -295,7 +295,6 @@ export class OverworldScene extends Phaser.Scene {
       case 'moved': this.moveRemote(ev.id, ev.x, ev.y, ev.facing); break;
       case 'left': this.removeRemote(ev.id); break;
       case 'emoted': this.showBubble(ev.id, EMOTE_EMOJI[ev.kind] ?? '❓'); break;
-      case 'said': this.showBubble(ev.id, QUICK_CHAT[ev.phrase] ?? ''); break;
     }
   }
 

@@ -238,7 +238,9 @@ function wire(s: Socket) {
   s.on('presence:moved', (p: { id: string; x: number; y: number; facing: string }) => presenceHandler?.({ type: 'moved', ...p }));
   s.on('presence:left', (p: { id: string }) => presenceHandler?.({ type: 'left', id: p?.id }));
   s.on('presence:emoted', (p: { id: string; kind: string }) => presenceHandler?.({ type: 'emoted', ...p }));
-  s.on('presence:said', (p: { id: string; phrase: number }) => presenceHandler?.({ type: 'said', ...p }));
+  s.on('presence:said', (p: { id: string; name: string; text: string }) => {
+    if (p?.text) useChat.getState().push({ id: p.id, name: p.name || 'Tamer', text: p.text });
+  });
   s.on('exchange:quoted', (q: ExchangeQuote) => useNet.setState({ exchangeQuote: q, exchangeBusy: false }));
   s.on('exchange:result', (r: ExchangeResult) => {
     useNet.setState({ exchangeBusy: false, exchangeQuote: null });
@@ -478,8 +480,15 @@ export type PresenceEvent =
   | { type: 'joined'; player: PresencePlayer }
   | { type: 'moved'; id: string; x: number; y: number; facing: string }
   | { type: 'left'; id: string }
-  | { type: 'emoted'; id: string; kind: string }
-  | { type: 'said'; id: string; phrase: number };
+  | { type: 'emoted'; id: string; kind: string };
+
+/** A free-text chat message in the live overworld (rendered in the corner ChatBox). */
+export interface ChatMsg { key: number; id: string; name: string; text: string; }
+let chatKey = 0;
+export const useChat = create<{ messages: ChatMsg[]; push: (m: Omit<ChatMsg, 'key'>) => void }>((set) => ({
+  messages: [],
+  push: (m) => set((s) => ({ messages: [...s.messages.slice(-59), { ...m, key: chatKey++ }] })),
+}));
 
 let presenceHandler: ((ev: PresenceEvent) => void) | null = null;
 /** The OverworldScene registers this on create and clears it on shutdown. */
@@ -494,8 +503,8 @@ export function sendPresenceMove(x: number, y: number, facing: string) {
 export function sendPresenceEmote(kind: string) {
   if (socket?.connected) socket.emit('presence:emote', { kind });
 }
-export function sendPresenceChat(phrase: number) {
-  if (socket?.connected) socket.emit('presence:chat', { phrase });
+export function sendPresenceChat(text: string) {
+  if (socket?.connected) socket.emit('presence:chat', { text });
 }
 
 let summonWatchdog: ReturnType<typeof setTimeout> | null = null;

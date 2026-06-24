@@ -387,9 +387,9 @@ function bind(socket: Socket) {
     const id = pid();
     if (id && p) presence.emote(id, String(p.kind ?? ''));
   });
-  socket.on('presence:chat', (p: { phrase?: number }) => {
+  socket.on('presence:chat', (p: { text?: string }) => {
     const id = pid();
-    if (id && p) presence.chat(id, Number(p.phrase));
+    if (id && p) presence.chat(id, String(p.text ?? ''));
   });
 
   socket.on('disconnect', () => {
