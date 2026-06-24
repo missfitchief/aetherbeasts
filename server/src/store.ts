@@ -65,6 +65,7 @@ export class Store {
   private writeChains = new Map<string, Promise<unknown>>();
   private usedSigs = new Set<string>(); // in-memory single-use fallback when no DB
   private rewardsPool = 0n; // LUMEN->$AETHER Exchange payout pool ($AETHER base units), persisted in `meta`
+  private recentRedemptions: { at: number; base: bigint }[] = []; // rolling 7-day window for the tau governor (in-memory; resets on restart)
 
   async init() {
     if (!DATABASE_URL) {
@@ -459,6 +460,22 @@ export class Store {
         [this.rewardsPool.toString()],
       );
     } catch { /* best-effort; the in-memory value stays authoritative this run */ }
+  }
+  /** Record a confirmed payout for the tau governor's rolling 7-day window. */
+  recordRedemption(baseUnits: bigint, now: number): void {
+    this.recentRedemptions.push({ at: now, base: baseUnits });
+    const cutoff = now - 7 * 86_400_000;
+    this.recentRedemptions = this.recentRedemptions.filter((r) => r.at >= cutoff);
+  }
+  /** Burn-tax input R = (7-day redeemed value) / (the pool's daily budget = pool/7).
+   *  Rises as cash-out drains the pool faster, so tau throttles outflow under stress. */
+  rollingRedeemRatio(now: number): number {
+    const cutoff = now - 7 * 86_400_000;
+    this.recentRedemptions = this.recentRedemptions.filter((r) => r.at >= cutoff);
+    const redeemed = this.recentRedemptions.reduce((a, r) => a + r.base, 0n);
+    const dailyBudget = this.rewardsPool / 7n;
+    if (dailyBudget <= 0n) return redeemed > 0n ? 999 : 0; // empty pool but outflow => max stress
+    return Number(redeemed) / Number(dailyBudget);
   }
 
   leaderboard(limit = 20) {

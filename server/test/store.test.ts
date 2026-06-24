@@ -80,3 +80,15 @@ for (let i = 0; i < 15; i++) if (store.grantRankedWinLumen(F.id, fday) > 0) drip
 assert(drips === 10, 'ranked-win LUMEN is capped at 10/day');
 
 console.log('✅ LUMEN faucet tests passed');
+
+// --- tau governor: rolling 7-day redeem ratio -----------------------------
+const ts = new Store();
+await ts.init(); // in-memory, pool seed 0
+ts.addRewardsPool(700n); // daily budget = pool/7 = 100
+assert(ts.rollingRedeemRatio(Date.now()) === 0, 'no recent redemptions => ratio 0 (tau floor)');
+ts.recordRedemption(50n, Date.now());
+assert(Math.abs(ts.rollingRedeemRatio(Date.now()) - 0.5) < 1e-9, 'ratio = 7d redeemed / (pool/7) = 50/100');
+ts.recordRedemption(40n, Date.now() - 8 * 86_400_000); // older than 7 days -> pruned
+assert(Math.abs(ts.rollingRedeemRatio(Date.now()) - 0.5) < 1e-9, 'stale redemptions fall out of the window');
+
+console.log('✅ tau governor rolling-window test passed');

@@ -310,7 +310,7 @@ function bind(socket: Socket) {
     const price = await aetherUsdPrice();
     const q = redeemQuote({
       lumenRequested: Math.min(requested, redeemable),
-      aetherPriceUsd: price, aetherDecimals: AETHER_DECIMALS, rollingRatio: 0, // TODO: wire a rolling-window R for the tau governor
+      aetherPriceUsd: price, aetherDecimals: AETHER_DECIMALS, rollingRatio: store.rollingRedeemRatio(now),
       dailyUsedLumen: dailyUsed, weeklyUsedLumen: weeklyUsed, poolBaseUnits: store.getRewardsPool(),
     });
     socket.emit('exchange:quoted', {
@@ -339,7 +339,7 @@ function bind(socket: Socket) {
     // Re-quote server-side; the client's numbers are NEVER trusted for a payout.
     const q = redeemQuote({
       lumenRequested: Math.min(requested, redeemable),
-      aetherPriceUsd: price, aetherDecimals: AETHER_DECIMALS, rollingRatio: 0,
+      aetherPriceUsd: price, aetherDecimals: AETHER_DECIMALS, rollingRatio: store.rollingRedeemRatio(now),
       dailyUsedLumen: dailyUsed, weeklyUsedLumen: weeklyUsed, poolBaseUnits: store.getRewardsPool(),
     });
     if (!q.ok) {
@@ -360,6 +360,7 @@ function bind(socket: Socket) {
       store.addRewardsPool(q.aetherBaseUnits);
       return fail(pay.reason ?? 'Payout failed — your LUMEN was refunded.');
     }
+    store.recordRedemption(q.aetherBaseUnits, now); // feed the tau governor's rolling 7-day window
     socket.emit('exchange:result', { ok: true, sig: pay.sig, lumenSpent: q.acceptedLumen, aether: Number(q.aetherBaseUnits) / DECIMALS_POW });
     socket.emit('profile:update', publicProfile(rec));
   });
