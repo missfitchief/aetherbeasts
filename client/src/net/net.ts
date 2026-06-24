@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { watchAccountChange, activeTrustedKey, currentProviderKey } from './wallet.js';
+import { watchAccountChange, activeTrustedKey, currentProviderKey, disconnectWallet } from './wallet.js';
 import { io, type Socket } from 'socket.io-client';
 import type {
   PublicProfile,
@@ -162,6 +162,14 @@ function logoffWallet(): void {
   window.location.reload();
 }
 
+/** Explicit "log out / switch wallet": disconnect the wallet (best-effort),
+ *  clear the session, and reload to the LoginGate so the player can sign in
+ *  with a different wallet (a different account / character). */
+export async function logout(): Promise<void> {
+  try { await disconnectWallet(); } catch { /* ignore */ }
+  logoffWallet();
+}
+
 function reconcileWallet(activeKey: string | null): void {
   const current = useNet.getState().wallet;
   if (!current) return;                                                  // not signed in
@@ -173,12 +181,10 @@ function reconcileWallet(activeKey: string | null): void {
   if (activeKey && activeKey !== current) {                              // switched to another account
     console.info('[wallet] active account changed →', activeKey.slice(0, 8) + '… (logging off)');
     logoffWallet();
-    return;
   }
-  if (!activeKey && sawConnectedKey) {                                   // disconnected / untrusted switch
-    console.info('[wallet] wallet disconnected/switched → logging off');
-    logoffWallet();
-  }
+  // A null/ambiguous reading (lock, transient state, or a switch to an account
+  // that never connected) is NOT auto-logged-off — to avoid surprise reloads.
+  // The explicit "Switch Wallet" button in the Menu handles those cases.
 }
 
 async function pollWallet(): Promise<void> {

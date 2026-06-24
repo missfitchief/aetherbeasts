@@ -1,5 +1,5 @@
 import { useGame } from '../../state/store.js';
-import { useNet } from '../../net/net.js';
+import { useNet, logout } from '../../net/net.js';
 import { dexCounts } from '@aether/shared';
 import { Modal } from '../Panels.js';
 
@@ -11,6 +11,7 @@ export function MenuPanel() {
   const showToast = useGame((s) => s.showToast);
   const save = useGame((s) => s.save);
   const exchangeEnabled = useNet((s) => s.exchangeEnabled);
+  const wallet = useNet((s) => s.wallet);
   if (!save) return null;
   const dc = dexCounts(save);
 
@@ -40,6 +41,17 @@ export function MenuPanel() {
         persist();
         closePanel();
         setScreen('title');
+      },
+    },
+    {
+      emoji: '🔌',
+      label: 'Switch Wallet',
+      sub: wallet ? `${wallet.slice(0, 4)}…${wallet.slice(-4)}` : 'Log out',
+      onClick: () => {
+        if (window.confirm('Log out and switch wallet? Your progress is saved to this wallet.')) {
+          persist();
+          void logout();
+        }
       },
     },
   ];

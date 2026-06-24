@@ -14,6 +14,8 @@ export interface SolanaProvider {
   /** Wallet events — Phantom/Solflare emit 'accountChanged' when the user switches accounts. */
   on?: (event: string, handler: (...args: unknown[]) => void) => void;
   off?: (event: string, handler: (...args: unknown[]) => void) => void;
+  /** Disconnect the dApp from the wallet extension. */
+  disconnect?: () => Promise<void>;
 }
 declare global {
   interface Window {
@@ -125,4 +127,11 @@ export async function activeTrustedKey(): Promise<string | null> {
 export function currentProviderKey(): string | null {
   const pk = detectWallet()?.publicKey;
   return pk ? pk.toString() : null;
+}
+
+/** Best-effort: disconnect the dApp from the wallet extension, so the next
+ *  connect() starts fresh (and the user can pick a different account). */
+export async function disconnectWallet(): Promise<void> {
+  const p = detectWallet();
+  try { await p?.disconnect?.(); } catch { /* ignore — clearing the session is what matters */ }
 }
