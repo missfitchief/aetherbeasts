@@ -28,7 +28,6 @@ interface HpBar {
   redraw: (pct: number) => void;
 }
 
-const toHex = (c: unknown): number => (typeof c === 'number' ? c : parseInt(String(c).replace('#', ''), 16) || 0x9aa3b2);
 /** Glossy HP-bar fill colours (top highlight, bottom shade) by remaining fraction. */
 function hpPair(pct: number): [number, number] {
   if (pct > 0.5) return [0x7bed90, 0x35a850];
@@ -128,7 +127,7 @@ export class BattleScene extends Phaser.Scene {
 
   private makePanel(x: number, y: number, c: Creature, isPlayer: boolean): { container: Phaser.GameObjects.Container; hp: HpBar; exp?: Phaser.GameObjects.Rectangle } {
     const w = PANEL_W;
-    const h = isPlayer ? 56 : 44;
+    const h = isPlayer ? 54 : 42;
     const accent = isPlayer ? 0xffd166 : 0x8be0ff; // gold = you, cyan = enemy
     const cont = this.add.container(x, y).setDepth(50);
 
@@ -140,29 +139,17 @@ export class BattleScene extends Phaser.Scene {
     box.strokeRoundedRect(0, 0, w, h, 9);
     cont.add(box);
 
-    const name = this.add.text(12, 7, displayName(c), { fontFamily: 'monospace', fontSize: '13px', color: '#ffffff' });
+    const name = this.add.text(12, 6, displayName(c), { fontFamily: 'monospace', fontSize: '13px', color: '#ffffff' });
     cont.add(name);
 
-    // type pips beside the name (colour = type — a quick read of the matchup)
-    let px = 12 + name.width + 8;
-    for (const t of getSpecies(c.speciesId).types) {
-      const pip = this.add.graphics();
-      pip.fillStyle(toHex(TYPE_COLOR[t]), 1);
-      pip.fillRoundedRect(px, 9, 10, 10, 3);
-      pip.lineStyle(1, 0x0a1120, 0.9);
-      pip.strokeRoundedRect(px, 9, 10, 10, 3);
-      cont.add(pip);
-      px += 13;
-    }
-
     // Lv pill, top-right
-    const lvW = 32;
+    const lvW = 34;
     const lvPill = this.add.graphics();
     lvPill.fillStyle(0x0a1120, 0.85);
-    lvPill.fillRoundedRect(w - lvW - 9, 6, lvW, 15, 7);
+    lvPill.fillRoundedRect(w - lvW - 10, 5, lvW, 15, 7);
     lvPill.lineStyle(1, accent, 0.55);
-    lvPill.strokeRoundedRect(w - lvW - 9, 6, lvW, 15, 7);
-    const lv = this.add.text(w - 9 - lvW / 2, 13.5, `Lv${c.level}`, { fontFamily: 'monospace', fontSize: '11px', color: '#ffd166' }).setOrigin(0.5);
+    lvPill.strokeRoundedRect(w - lvW - 10, 5, lvW, 15, 7);
+    const lv = this.add.text(w - 10 - lvW / 2, 12.5, `Lv${c.level}`, { fontFamily: 'monospace', fontSize: '11px', color: '#ffd166' }).setOrigin(0.5);
     cont.add([lvPill, lv]);
 
     if (isPlayer) {
@@ -173,12 +160,13 @@ export class BattleScene extends Phaser.Scene {
       cont.add(you);
     }
 
-    // hp bar: recessed track + glossy gradient fill
-    const barX = 12, barY = isPlayer ? 29 : 27, barW = w - 24, barH = 11, r = barH / 2;
+    // hp bar: deep recessed track + a vivid, glossy gradient fill
+    const barX = 12, barW = w - 24, barH = 13, r = barH / 2;
+    const barY = 24;
     const hpBg = this.add.graphics();
-    hpBg.fillStyle(0x05070d, 0.9);
+    hpBg.fillStyle(0x04060c, 1);
     hpBg.fillRoundedRect(barX, barY, barW, barH, r);
-    hpBg.lineStyle(1, 0x33415e, 0.9);
+    hpBg.lineStyle(1, 0x3b4a68, 1);
     hpBg.strokeRoundedRect(barX, barY, barW, barH, r);
     cont.add(hpBg);
     const hpFill = this.add.graphics();
@@ -187,23 +175,23 @@ export class BattleScene extends Phaser.Scene {
       hpFill.clear();
       const p = Math.max(0, Math.min(1, pct));
       const fw = (barW - 2) * p;
-      if (fw <= 0.5) return;
+      if (fw <= 1) return;
       const [c1, c2] = hpPair(p);
       hpFill.fillGradientStyle(c1, c1, c2, c2, 1);
       hpFill.fillRoundedRect(barX + 1, barY + 1, fw, barH - 2, (barH - 2) / 2);
-      hpFill.fillStyle(0xffffff, 0.3); // gloss highlight
-      hpFill.fillRoundedRect(barX + 2, barY + 1.5, Math.max(1, fw - 2), Math.max(1, (barH - 2) / 2.8), (barH - 2) / 3);
+      hpFill.fillStyle(0xffffff, 0.5); // crisp gloss line near the top
+      hpFill.fillRoundedRect(barX + 3, barY + 2, Math.max(1, fw - 5), 2, 1);
     };
     redraw(c.currentHp / statOf(c, 'mhp'));
 
     let exp: Phaser.GameObjects.Rectangle | undefined;
     if (isPlayer) {
-      const hpLabel = this.add.text(12, 43, 'HP', { fontFamily: 'monospace', fontSize: '9px', color: '#7e8aa0' });
-      const hpNum = this.add.text(w - 12, 43, `${c.currentHp}/${statOf(c, 'mhp')}`, { fontFamily: 'monospace', fontSize: '10px', color: '#cbd5e1' }).setOrigin(1, 0);
+      const hpLabel = this.add.text(12, 40, 'HP', { fontFamily: 'monospace', fontSize: '9px', color: '#7e8aa0' });
+      const hpNum = this.add.text(w - 14, 39, `${c.currentHp}/${statOf(c, 'mhp')}`, { fontFamily: 'monospace', fontSize: '11px', color: '#e6edf7' }).setOrigin(1, 0);
       hpNum.setName('hpnum');
       cont.add([hpLabel, hpNum]);
-      const expBg = this.add.rectangle(12, 52, barW, 3, 0x223049).setOrigin(0, 0.5);
-      exp = this.add.rectangle(12, 52, barW * expProgress(c), 3, 0x4aa3ff).setOrigin(0, 0.5);
+      const expBg = this.add.rectangle(12, 50, barW, 2, 0x223049).setOrigin(0, 0.5);
+      exp = this.add.rectangle(12, 50, barW * expProgress(c), 2, 0x4aa3ff).setOrigin(0, 0.5);
       cont.add([expBg, exp]);
     }
     return { container: cont, hp: { redraw }, exp };
