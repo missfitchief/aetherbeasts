@@ -385,11 +385,11 @@ function bind(socket: Socket) {
   });
   socket.on('presence:emote', (p: { kind?: string }) => {
     const id = pid();
-    if (id && p) presence.emote(socket, id, String(p.kind ?? ''));
+    if (id && p) presence.emote(id, String(p.kind ?? ''));
   });
   socket.on('presence:chat', (p: { phrase?: number }) => {
     const id = pid();
-    if (id && p) presence.chat(socket, id, Number(p.phrase));
+    if (id && p) presence.chat(id, Number(p.phrase));
   });
 
   socket.on('disconnect', () => {

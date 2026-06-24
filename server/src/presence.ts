@@ -55,16 +55,16 @@ export class PresenceManager {
     socket.to(room(rec.map)).emit('presence:moved', { id: playerId, x: rec.x, y: rec.y, facing: rec.facing });
   }
 
-  emote(socket: Socket, playerId: string, kind: string): void {
+  emote(playerId: string, kind: string): void {
     const rec = this.byPlayer.get(playerId);
     if (!rec || !EMOTES.includes(kind as Emote)) return; // fixed set only
-    socket.to(room(rec.map)).emit('presence:emoted', { id: playerId, kind });
+    this.io.to(room(rec.map)).emit('presence:emoted', { id: playerId, kind }); // include sender (own bubble)
   }
 
-  chat(socket: Socket, playerId: string, phrase: number): void {
+  chat(playerId: string, phrase: number): void {
     const rec = this.byPlayer.get(playerId);
     if (!rec || !Number.isInteger(phrase) || phrase < 0 || phrase >= QUICK_CHAT.length) return; // canned only
-    socket.to(room(rec.map)).emit('presence:said', { id: playerId, phrase });
+    this.io.to(room(rec.map)).emit('presence:said', { id: playerId, phrase }); // include sender
   }
 
   leave(playerId: string): void {
