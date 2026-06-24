@@ -13,11 +13,11 @@ function saveAtLevel(level: number) {
 const intervalMs = (s: ReturnType<typeof saveAtLevel>) => wildIntervalMin(forestLevel(s)) * MIN;
 
 describe('wild forest spawns', () => {
-  it('interval is short early and grows with level (capped at 90)', () => {
+  it('interval is short early and capped at 5 min', () => {
     expect(wildIntervalMin(1)).toBe(2);                            // fast first session
-    expect(wildIntervalMin(10)).toBeLessThan(wildIntervalMin(50)); // grows with level
-    expect(wildIntervalMin(50)).toBeLessThan(wildIntervalMin(100));
-    expect(wildIntervalMin(100)).toBeLessThanOrEqual(90);          // never runaway-slow
+    expect(wildIntervalMin(1)).toBeLessThan(wildIntervalMin(5));   // ramps a little early
+    expect(wildIntervalMin(50)).toBe(5);                           // capped at 5 min
+    expect(wildIntervalMin(100)).toBeLessThanOrEqual(5);           // never runaway-slow
   });
 
   it('cap is front-loaded for new tamers, tightening to one late game', () => {

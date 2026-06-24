@@ -2,6 +2,7 @@
 import { PARTY_SIZE, BOX_PAGE_SIZE, BOX_PAGES } from '../constants.js';
 import type { SaveData, Creature, DexEntry, InventorySlot } from '../types.js';
 import { SPECIES_ORDER } from '../data/species.js';
+import { getMove } from '../data/moves.js';
 import { createCreature } from './factory.js';
 import { statOf } from './formulas.js';
 import type { RNG } from './rng.js';
@@ -93,7 +94,7 @@ export function healParty(save: SaveData): void {
 export function healCreature(c: Creature): void {
   c.currentHp = statOf(c, 'mhp');
   c.ailment = null;
-  // restore PP to each move's max handled by caller if needed; we restore fully here
+  c.pp = c.moves.map((mid) => getMove(mid).pp); // restore every move's PP to full
 }
 
 export function dexCounts(save: SaveData): { seen: number; caught: number; total: number } {

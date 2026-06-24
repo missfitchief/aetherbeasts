@@ -22,10 +22,10 @@ export function forestLevel(save: SaveData): number {
   return clampLevel(top || 5);
 }
 
-/** Minutes between wild spawns — short early so new tamers catch fast, lengthening
- *  with progression (≈2 at Lv1 → ≈10 at Lv10 → ≈18 at Lv20 → caps at 90). */
+/** Minutes between wild spawns — short early so new tamers catch fast, ramping a
+ *  little with level but CAPPED at 5 min so the forest always stays busy to play. */
 export function wildIntervalMin(level: number): number {
-  return Math.round(Math.min(90, 2 + (clampLevel(level) - 1) * 0.85));
+  return Math.round(Math.min(5, 2 + (clampLevel(level) - 1) * 0.85));
 }
 export function wildIntervalMs(level: number): number {
   return wildIntervalMin(level) * MS_PER_MIN;
