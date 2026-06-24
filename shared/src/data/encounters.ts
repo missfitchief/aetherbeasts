@@ -61,7 +61,10 @@ export function scaledWildLevel(zone: EncounterZone, partyTopLevel: number, rng:
   const roll = randInt(rng, lo, hi);
   const scale = zone.id.includes('deep') ? 0.85 : 0.65;
   const drift = Math.floor(Math.max(0, partyTopLevel - hi) * scale);
-  const cap = Math.min(LEVEL_CAP, partyTopLevel + 2);
+  // Headroom grows with the player so the early game is never unfair: a Lv1-2 trainer
+  // never meets a higher-level wild; it opens to +2 only once you're established.
+  const headroom = partyTopLevel <= 2 ? 0 : partyTopLevel <= 4 ? 1 : 2;
+  const cap = Math.min(LEVEL_CAP, partyTopLevel + headroom);
   return Math.max(lo, Math.min(cap, roll + drift));
 }
 

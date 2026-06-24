@@ -333,6 +333,12 @@ export class BattleScene extends Phaser.Scene {
 
   private async chooseTeam(forced: boolean): Promise<PlayerAction | null> {
     const party = this.state.party;
+    // No dead-end: if there's no other usable beast, say so and return to the menu
+    // instead of opening an all-greyed-out switch list you can't act on.
+    if (!forced && !party.some((c, i) => i !== this.state.activeIndex && c.currentHp > 0)) {
+      await this.say('You have no other beasts to switch to!');
+      return null;
+    }
     const items: MenuItem[] = party.map((c, i) => ({
       index: i,
       label: displayName(c),
