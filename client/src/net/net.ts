@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { watchAccountChange, activeTrustedKey, currentProviderKey } from './wallet.js';
 import { io, type Socket } from 'socket.io-client';
 import type {
   PublicProfile,
@@ -145,18 +146,48 @@ function flushSave() {
 }
 
 // ---- lifecycle -------------------------------------------------------------
-/** Auto log-off when the user switches the active wallet account in their
- *  extension — clear the session and reload to the LoginGate so they sign in
- *  fresh as the new wallet (a different account / character). */
-function onWalletSwitch(newPublicKey: string | null): void {
-  const current = useNet.getState().wallet;
-  if (!current) return;                                // not signed in — nothing to do
-  if (newPublicKey && newPublicKey === current) return; // same account — no real switch
+// --- wallet account-switch detection (auto log-off) -------------------------
+// Phantom's `accountChanged` event is unreliable, so we don't trust it alone:
+// we also poll the provider's reported key + re-check on focus. Once we've
+// confirmed the connected account (`sawConnectedKey`), a later mismatch OR a
+// drop to null (disconnect / switch to an account that hasn't trusted the dApp)
+// means the user switched wallets → log off to the LoginGate.
+let sawConnectedKey = false;
+
+function logoffWallet(): void {
   try {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(ACCOUNT_KEY);
   } catch { /* ignore */ }
   window.location.reload();
+}
+
+function reconcileWallet(activeKey: string | null): void {
+  const current = useNet.getState().wallet;
+  if (!current) return;                                                  // not signed in
+  if (activeKey && activeKey === current) {
+    if (!sawConnectedKey) console.info('[wallet] watching account', activeKey.slice(0, 8) + '…');
+    sawConnectedKey = true;
+    return;                                                              // still us
+  }
+  if (activeKey && activeKey !== current) {                              // switched to another account
+    console.info('[wallet] active account changed →', activeKey.slice(0, 8) + '… (logging off)');
+    logoffWallet();
+    return;
+  }
+  if (!activeKey && sawConnectedKey) {                                   // disconnected / untrusted switch
+    console.info('[wallet] wallet disconnected/switched → logging off');
+    logoffWallet();
+  }
+}
+
+async function pollWallet(): Promise<void> {
+  if (!useNet.getState().wallet) return;
+  let key = currentProviderKey();
+  if (key === null && !sawConnectedKey) {
+    try { key = await activeTrustedKey(); } catch { /* ignore */ } // establish the connection once (silent)
+  }
+  reconcileWallet(key);
 }
 
 export function startNet() {
@@ -166,8 +197,13 @@ export function startNet() {
   // Don't lose a debounced save when the tab closes/navigates away.
   window.addEventListener('beforeunload', flushSave);
   window.addEventListener('pagehide', flushSave);
-  // Log off automatically when the user switches the active wallet in their extension.
-  import('./wallet.js').then(({ watchAccountChange }) => watchAccountChange(onWalletSwitch)).catch(() => {});
+  // Auto log-off when the user switches the active wallet account: event (best-
+  // effort) + polling (dependable) + a re-check whenever the page regains focus.
+  watchAccountChange((k) => { console.info('[wallet] accountChanged event:', k ? k.slice(0, 8) + '…' : 'null'); reconcileWallet(k); });
+  setInterval(() => { void pollWallet(); }, 2000);
+  window.addEventListener('focus', () => { void pollWallet(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) void pollWallet(); });
+  void pollWallet();
   if (import.meta.env.DEV) {
     (window as unknown as { __net: unknown }).__net = {
       useNet, findMatch, cancelMatch, submitMove, submitSwitch, forfeitMatch, connectWallet, refreshBalance, leaveResult, premiumSummon, emitQuestProgress, claimQuest,

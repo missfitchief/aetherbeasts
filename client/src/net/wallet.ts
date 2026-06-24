@@ -80,25 +80,49 @@ export async function connectWallet(): Promise<WalletHandle> {
 let watchingAccount = false;
 /**
  * Fire `cb` when the user switches the active account in their wallet extension
- * (Phantom/Solflare emit `accountChanged`). `cb` gets the new public key as a
- * base58 string, or null if the wallet disconnected/locked. Attaches once and
- * retries until a provider is injected.
+ * (Phantom/Solflare emit `accountChanged`) or disconnects. `cb` gets the new
+ * public key as base58, or null if disconnected/locked. Attaches once and
+ * retries until a provider is injected. NOTE: this event is unreliable (Phantom
+ * may not emit it when switching to an account that hasn't connected to the
+ * dApp) — `activeTrustedKey()` polled on focus is the dependable path.
  */
 export function watchAccountChange(cb: (publicKey: string | null) => void): void {
   if (watchingAccount) return;
+  const toKey = (pk: unknown) => (pk && typeof (pk as { toString(): string }).toString === 'function' ? (pk as { toString(): string }).toString() : null);
   const attach = (): boolean => {
     const p = detectWallet();
     if (!p || typeof p.on !== 'function') return false;
-    p.on('accountChanged', (pk: unknown) => {
-      const next = pk && typeof (pk as { toString(): string }).toString === 'function'
-        ? (pk as { toString(): string }).toString()
-        : null;
-      cb(next);
-    });
+    p.on('accountChanged', (pk: unknown) => cb(toKey(pk)));
+    p.on('disconnect', () => cb(null));
     watchingAccount = true;
     return true;
   };
   if (attach()) return;
   let tries = 0;
   const iv = setInterval(() => { if (attach() || ++tries > 25) clearInterval(iv); }, 300);
+}
+
+/**
+ * The currently-active wallet account, but ONLY if it already trusts this dApp
+ * (silent — never shows a popup). Returns its base58 key, or null if the active
+ * account hasn't trusted the dApp / the wallet is locked. This is the reliable
+ * way to detect an account switch: poll it when the page regains focus.
+ */
+export async function activeTrustedKey(): Promise<string | null> {
+  const p = detectWallet();
+  if (!p) return null;
+  try {
+    const res = await p.connect({ onlyIfTrusted: true });
+    const pk = (res && (res as { publicKey?: { toString(): string } }).publicKey) || p.publicKey;
+    return pk ? pk.toString() : null;
+  } catch {
+    return null; // active account hasn't trusted the dApp (or wallet locked)
+  }
+}
+
+/** The wallet's currently-reported account key (synchronous property read, no
+ *  RPC/popup), or null if none. Cheap enough to poll. */
+export function currentProviderKey(): string | null {
+  const pk = detectWallet()?.publicKey;
+  return pk ? pk.toString() : null;
 }
