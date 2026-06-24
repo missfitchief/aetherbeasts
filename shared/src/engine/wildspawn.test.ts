@@ -20,43 +20,42 @@ describe('wild forest spawns', () => {
     expect(wildIntervalMin(100)).toBeLessThanOrEqual(5);           // never runaway-slow
   });
 
-  it('cap is front-loaded for new tamers, tightening to one late game', () => {
-    expect(wildCap(1)).toBe(3);
-    expect(wildCap(12)).toBe(3);
-    expect(wildCap(13)).toBe(2);
-    expect(wildCap(30)).toBe(2);
-    expect(wildCap(31)).toBe(1);
-    expect(wildCap(100)).toBe(1);
+  it('cap is front-loaded for new tamers, tightening late game', () => {
+    expect(wildCap(1)).toBe(5);
+    expect(wildCap(12)).toBe(5);
+    expect(wildCap(13)).toBe(3);
+    expect(wildCap(30)).toBe(3);
+    expect(wildCap(31)).toBe(2);
+    expect(wildCap(100)).toBe(2);
   });
 
-  it('a low-level forest banks up to the cap (3), never more', () => {
-    const s = saveAtLevel(5); // cap 3
-    expect(wildCap(forestLevel(s))).toBe(3);
+  it('a low-level forest banks up to the cap (5), never more', () => {
+    const s = saveAtLevel(5); // cap 5
+    expect(wildCap(forestLevel(s))).toBe(5);
     const t = intervalMs(s);
-    expect(wildCount(s, t * 40)).toBe(3);        // long wait -> full forest of 3
-    expect(wildCount(s, 9_999_999_999)).toBe(3); // never exceeds the cap
+    expect(wildCount(s, t * 40)).toBe(5);        // long wait -> full forest of 5
+    expect(wildCount(s, 9_999_999_999)).toBe(5); // never exceeds the cap
   });
 
   it('a full low-level forest can be caught down one slot at a time', () => {
-    const s = saveAtLevel(5); // cap 3
+    const s = saveAtLevel(5); // cap 5
     const now = 9_999_999_999;
-    expect(wildCount(s, now)).toBe(3);
-    consumeWild(s, now); expect(wildCount(s, now)).toBe(2);
-    consumeWild(s, now); expect(wildCount(s, now)).toBe(1);
-    consumeWild(s, now); expect(wildCount(s, now)).toBe(0);
+    let n = 5;
+    expect(wildCount(s, now)).toBe(n);
+    while (n > 0) { consumeWild(s, now); n -= 1; expect(wildCount(s, now)).toBe(n); }
     consumeWild(s, now); expect(wildCount(s, now)).toBe(0); // never negative
   });
 
-  it('late game is a single roamer; encountering it resets the timer', () => {
-    const s = saveAtLevel(60); // cap 1
-    expect(wildCap(forestLevel(s))).toBe(1);
+  it('late game tightens to two roamers; the timer refills a consumed slot', () => {
+    const s = saveAtLevel(60); // cap 2
+    expect(wildCap(forestLevel(s))).toBe(2);
     const t = intervalMs(s);
     const now = 5_000_000_000;
-    expect(wildCount(s, now)).toBe(1);          // available (fresh save)
-    consumeWild(s, now);
-    expect(wildCount(s, now)).toBe(0);          // gone, timer reset
+    expect(wildCount(s, now)).toBe(2);          // full (fresh save)
+    consumeWild(s, now); expect(wildCount(s, now)).toBe(1);
+    consumeWild(s, now); expect(wildCount(s, now)).toBe(0); // both gone, timer reset
     expect(wildCount(s, now + t - 1)).toBe(0);  // still nothing just before the interval
-    expect(wildCount(s, now + t + 1)).toBe(1);  // next one after a full interval
+    expect(wildCount(s, now + t + 1)).toBe(1);  // one refills after a full interval
   });
 
   it('normalizeSave migrates an old incubator save / backfills wild', () => {

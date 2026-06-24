@@ -127,6 +127,25 @@ export interface AetherBalance {
   mint: string | null;
 }
 
+// ---- live overworld presence (ephemeral; broadcast within a map only) -------
+/** Fixed emote + quick-chat sets — no free text, so there is no moderation surface. */
+export const EMOTES = ['wave', 'happy', 'surprised', 'fire', 'heart', 'cry', 'gg', 'sleep'] as const;
+export type Emote = typeof EMOTES[number];
+export const QUICK_CHAT = ['Hi!', 'GG!', 'Follow me', 'Nice catch!', 'Trade?', 'Good luck', 'This way', 'Thanks!'] as const;
+
+/** One other player visible on your map. */
+export interface PresencePlayer {
+  id: string;
+  name: string;
+  map: string;
+  x: number;
+  y: number;
+  facing: string;
+  sprite: string;
+}
+export interface PresenceEnterMsg { map: string; x: number; y: number; facing: string; sprite: string }
+export interface PresenceMoveMsg { x: number; y: number; facing: string }
+
 // ---- quests (read-only projection; server owns the authoritative state) -----
 export interface QuestViewItem {
   id: string;

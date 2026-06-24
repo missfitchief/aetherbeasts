@@ -39,9 +39,9 @@ export function wildIntervalMs(level: number): number {
  */
 export function wildCap(level: number): number {
   const l = clampLevel(level);
-  if (l <= 12) return 3;
-  if (l <= 30) return 2;
-  return 1;
+  if (l <= 12) return 5;
+  if (l <= 30) return 3;
+  return 2;
 }
 
 // Accrual start, pinned no further back than `cap` intervals so the count is

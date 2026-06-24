@@ -3,11 +3,12 @@ import {
   ENCOUNTER_ZONES, scaledWildLevel, createCreature, weightedPick, defaultRng, getSpecies, SPECIES_ORDER,
   pendingEvolution, evolve, displayName, wildCount, consumeWild,
   hasBadge, isTrainerDefeated, markTrainerDefeated, awardBadge, getTrainer,
-  dailyBossOf, DAILY_BOSS_REWARD,
+  dailyBossOf, DAILY_BOSS_REWARD, QUICK_CHAT,
   type Creature, type Direction, type Trainer,
 } from '@aether/shared';
 import { getMap, TILE, ROUTE_START_Y, OBJ_DEF, type WorldMap, type Tile, type Npc, type Interactable } from '../world/maps.js';
 import { useGame } from '../../state/store.js';
+import { useNet, setPresenceHandler, sendPresenceEnter, sendPresenceMove, type PresenceEvent } from '../../net/net.js';
 import { audio } from '../audio.js';
 import { monSpriteUrl, assetUrl } from '../assets.js';
 import { generateTileArt } from '../world/tileart.js';
@@ -24,6 +25,8 @@ const CHAR_FILES: [string, string][] = [
   ['sheet_guy', 'char/char_guy_sheet.png'],
 ];
 const idleFrame = (d: Direction) => DIR_ROW[d] * 4;
+const EMOTE_EMOJI: Record<string, string> = { wave: '👋', happy: '😄', surprised: '😯', fire: '🔥', heart: '❤️', cry: '😢', gg: '🏆', sleep: '😴' };
+const BUBBLE_STYLE: Phaser.Types.GameObjects.Text.TextStyle = { fontSize: '12px', color: '#ffffff', backgroundColor: 'rgba(13,21,38,0.85)', padding: { x: 4, y: 2 } };
 
 const DIRV: Record<Direction, { dx: number; dy: number }> = {
   up: { dx: 0, dy: -1 }, down: { dx: 0, dy: 1 }, left: { dx: -1, dy: 0 }, right: { dx: 1, dy: 0 },
@@ -73,6 +76,8 @@ export class OverworldScene extends Phaser.Scene {
   private busy = false;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private npcSprites = new Map<string, Phaser.GameObjects.Sprite>();
+  private remotePlayers = new Map<string, { c: Phaser.GameObjects.Container; spr: Phaser.GameObjects.Sprite; bubble?: Phaser.GameObjects.Text; tween?: Phaser.Tweens.Tween }>();
+  private myId = '';
   /** Everything drawn for the current map, so it can be cleared on a warp. */
   private mapGfx: Phaser.GameObjects.GameObject[] = [];
   private inForest = false;
@@ -137,6 +142,10 @@ export class OverworldScene extends Phaser.Scene {
 
     this.player = this.add.sprite(0, 0, 'sheet_player', idleFrame(this.facing)).setOrigin(0.5, 0.85);
     this.placePlayer();
+
+    // Live presence: render other players on this map + announce ourselves.
+    setPresenceHandler((ev) => this.onPresence(ev));
+    this.enterPresence();
 
     // Overworld renders 1:1 (small character like the engine); interiors zoom in.
     this.applyCamera();
@@ -249,6 +258,8 @@ export class OverworldScene extends Phaser.Scene {
       this.tx = toX; this.ty = toY; this.facing = facing;
       this.placePlayer();
       this.applyCamera();
+      this.clearRemotes();   // drop the previous map's players
+      this.enterPresence();  // join the new map room + fetch its roster
       const save = useGame.getState().save;
       if (save) {
         save.position = { map: this.world.id, x: this.tx, y: this.ty, facing: this.facing };
@@ -278,6 +289,78 @@ export class OverworldScene extends Phaser.Scene {
     this.player.setDepth(this.ty * TILE + TILE);
     this.player.anims.stop();
     this.player.setFrame(idleFrame(this.facing));
+  }
+
+  // --- live overworld presence (other players on the same map) ---------------
+  private enterPresence(): void {
+    this.myId = useNet.getState().profile?.id ?? '';
+    sendPresenceEnter(this.world.id, this.tx, this.ty, this.facing, 'sheet_player');
+  }
+
+  private dirOf(facing: string): Direction {
+    return (facing in DIR_ROW ? facing : 'down') as Direction;
+  }
+
+  private onPresence(ev: PresenceEvent): void {
+    switch (ev.type) {
+      case 'roster': for (const p of ev.players) this.addRemote(p.id, p.name, p.x, p.y, p.facing); break;
+      case 'joined': this.addRemote(ev.player.id, ev.player.name, ev.player.x, ev.player.y, ev.player.facing); break;
+      case 'moved': this.moveRemote(ev.id, ev.x, ev.y, ev.facing); break;
+      case 'left': this.removeRemote(ev.id); break;
+      case 'emoted': this.showBubble(ev.id, EMOTE_EMOJI[ev.kind] ?? '❓'); break;
+      case 'said': this.showBubble(ev.id, QUICK_CHAT[ev.phrase] ?? ''); break;
+    }
+  }
+
+  private addRemote(id: string, name: string, x: number, y: number, facing: string): void {
+    if (!id || id === this.myId || this.remotePlayers.has(id)) return;
+    const spr = this.add.sprite(0, 0, 'sheet_player', idleFrame(this.dirOf(facing))).setOrigin(0.5, 0.85).setAlpha(0.92);
+    const label = this.add.text(0, -TILE * 0.95, name, { fontSize: '10px', color: '#9fe0ff' }).setOrigin(0.5, 1);
+    const c = this.add.container(x * TILE + TILE / 2, y * TILE + TILE * 0.85, [spr, label]).setDepth(y * TILE + TILE);
+    this.remotePlayers.set(id, { c, spr });
+  }
+
+  private moveRemote(id: string, x: number, y: number, facing: string): void {
+    const r = this.remotePlayers.get(id);
+    if (!r) return;
+    const dir = this.dirOf(facing);
+    r.spr.anims.play(`sheet_player_${dir}`, true);
+    r.tween?.stop();
+    r.tween = this.tweens.add({
+      targets: r.c, x: x * TILE + TILE / 2, y: y * TILE + TILE * 0.85, duration: 160,
+      onComplete: () => { r.spr.anims.stop(); r.spr.setFrame(idleFrame(dir)); r.c.setDepth(y * TILE + TILE); },
+    });
+    r.c.setDepth(y * TILE + TILE);
+  }
+
+  private removeRemote(id: string): void {
+    const r = this.remotePlayers.get(id);
+    if (!r) return;
+    r.tween?.stop();
+    r.c.destroy(); // destroys sprite + label + any bubble child
+    this.remotePlayers.delete(id);
+  }
+
+  private clearRemotes(): void {
+    for (const r of this.remotePlayers.values()) { r.tween?.stop(); r.c.destroy(); }
+    this.remotePlayers.clear();
+  }
+
+  /** Float an emote/chat bubble over a player for a couple seconds. */
+  private showBubble(id: string, text: string): void {
+    if (!text) return;
+    if (id === this.myId) {
+      const b = this.add.text(this.player.x, this.player.y - TILE * 1.1, text, BUBBLE_STYLE).setOrigin(0.5, 1).setDepth(99999);
+      this.time.delayedCall(2400, () => b.destroy());
+      return;
+    }
+    const r = this.remotePlayers.get(id);
+    if (!r) return;
+    r.bubble?.destroy();
+    const b = this.add.text(0, -TILE * 1.35, text, BUBBLE_STYLE).setOrigin(0.5, 1);
+    r.c.add(b);
+    r.bubble = b;
+    this.time.delayedCall(2400, () => { if (r.bubble === b) { b.destroy(); r.bubble = undefined; } });
   }
 
   private interactKeyDown(): boolean {
@@ -397,6 +480,7 @@ export class OverworldScene extends Phaser.Scene {
       save.playtimeSteps += 1;
     }
     this.updateMusic(false);
+    sendPresenceMove(this.tx, this.ty, this.facing);
 
     // Step-on warp (house doors + interior exits).
     const warp = this.world.warps.find((w) => w.x === this.tx && w.y === this.ty);

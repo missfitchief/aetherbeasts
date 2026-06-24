@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { Server, type Socket } from 'socket.io';
-import type { SaveData, PlayerAction, SummonReport, QuestProgressType } from '@aether/shared';
+import type { SaveData, PlayerAction, SummonReport, QuestProgressType, PresenceEnterMsg, PresenceMoveMsg } from '@aether/shared';
 import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, claimLoginReward, addItem, toQuestView, poolCreditFromRevenue, LUMEN_FAUCET, utcDate, redeemQuote, isRedeemEligible, REDEEM_DAILY_CAP, REDEEM_WEEKLY_CAP } from '@aether/shared';
 import { PORT, corsOrigin, TREASURY_ADDRESS, AETHER_MINT, AETHER_DECIMALS, QUOTE_TTL_MS, ONCHAIN_SUMMON_ENABLED, LUMEN_ENABLED, EXCHANGE_ENABLED, validateConfig } from './config.js';
 import { Store, publicProfile, type PlayerRecord } from './store.js';
@@ -11,6 +11,7 @@ import { verifyAetherPayment, walletAgeDays } from './payments.js';
 import { summonAetherQuote, aetherUsdPrice } from './pricefeed.js';
 import { payoutAether } from './payout.js';
 import { MatchManager } from './match.js';
+import { PresenceManager } from './presence.js';
 
 const store = new Store();
 const redeemInFlight = new Set<string>(); // serialize cash-outs per player (closes the redeem TOCTOU)
@@ -48,6 +49,7 @@ const io = new Server(httpServer, {
 });
 
 const matches = new MatchManager(io, store);
+const presence = new PresenceManager(io);
 
 function authOk(socket: Socket, rec: PlayerRecord) {
   store.applyDailyFloor(rec.id, DAILY_CREDIT_FLOOR);
@@ -372,12 +374,30 @@ function bind(socket: Socket) {
     }
   });
 
+  // --- live overworld presence (see other players move/emote/chat on the map) ---
+  socket.on('presence:enter', (p: PresenceEnterMsg) => {
+    const id = pid();
+    if (id) presence.enter(socket, id, store.getById(id)?.name ?? 'Tamer', p);
+  });
+  socket.on('presence:move', (p: PresenceMoveMsg) => {
+    const id = pid();
+    if (id) presence.move(socket, id, p);
+  });
+  socket.on('presence:emote', (p: { kind?: string }) => {
+    const id = pid();
+    if (id && p) presence.emote(socket, id, String(p.kind ?? ''));
+  });
+  socket.on('presence:chat', (p: { phrase?: number }) => {
+    const id = pid();
+    if (id && p) presence.chat(socket, id, Number(p.phrase));
+  });
+
   socket.on('disconnect', () => {
     const id = pid();
     sessions.delete(socket.id);
     bound.delete(socket.id);
     pending.delete(socket.id);
-    if (id) matches.disconnect(id);
+    if (id) { matches.disconnect(id); presence.leave(id); }
   });
 }
 

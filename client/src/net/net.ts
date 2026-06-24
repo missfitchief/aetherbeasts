@@ -15,6 +15,7 @@ import type {
   QuestProgressEvent,
   ExchangeQuote,
   ExchangeResult,
+  PresencePlayer,
 } from '@aether/shared';
 import { DEFAULT_STAKE, addItem } from '@aether/shared';
 import { useGame } from '../state/store.js';
@@ -230,6 +231,14 @@ function wire(s: Socket) {
   });
   s.on('save:saved', () => {});
   s.on('profile:update', (p: PublicProfile) => useNet.setState({ profile: p, wallet: p.wallet }));
+
+  // --- live overworld presence (relayed to the OverworldScene via presenceHandler) ---
+  s.on('presence:roster', (p: { players: PresencePlayer[] }) => presenceHandler?.({ type: 'roster', players: p?.players ?? [] }));
+  s.on('presence:joined', (p: { player: PresencePlayer }) => p?.player && presenceHandler?.({ type: 'joined', player: p.player }));
+  s.on('presence:moved', (p: { id: string; x: number; y: number; facing: string }) => presenceHandler?.({ type: 'moved', ...p }));
+  s.on('presence:left', (p: { id: string }) => presenceHandler?.({ type: 'left', id: p?.id }));
+  s.on('presence:emoted', (p: { id: string; kind: string }) => presenceHandler?.({ type: 'emoted', ...p }));
+  s.on('presence:said', (p: { id: string; phrase: number }) => presenceHandler?.({ type: 'said', ...p }));
   s.on('exchange:quoted', (q: ExchangeQuote) => useNet.setState({ exchangeQuote: q, exchangeBusy: false }));
   s.on('exchange:result', (r: ExchangeResult) => {
     useNet.setState({ exchangeBusy: false, exchangeQuote: null });
@@ -461,6 +470,32 @@ export function quoteExchange(lumen: number) {
 /** Redeem LUMEN for $AETHER (the server re-quotes + verifies before paying). */
 export function redeemExchange(lumen: number) {
   if (socket?.connected) { useNet.setState({ exchangeBusy: true }); socket.emit('exchange:redeem', { lumen }); }
+}
+
+// --- live overworld presence: emitters + a handler bridge to the Phaser scene ---
+export type PresenceEvent =
+  | { type: 'roster'; players: PresencePlayer[] }
+  | { type: 'joined'; player: PresencePlayer }
+  | { type: 'moved'; id: string; x: number; y: number; facing: string }
+  | { type: 'left'; id: string }
+  | { type: 'emoted'; id: string; kind: string }
+  | { type: 'said'; id: string; phrase: number };
+
+let presenceHandler: ((ev: PresenceEvent) => void) | null = null;
+/** The OverworldScene registers this on create and clears it on shutdown. */
+export function setPresenceHandler(fn: ((ev: PresenceEvent) => void) | null) { presenceHandler = fn; }
+
+export function sendPresenceEnter(map: string, x: number, y: number, facing: string, sprite: string) {
+  if (socket?.connected) socket.emit('presence:enter', { map, x, y, facing, sprite });
+}
+export function sendPresenceMove(x: number, y: number, facing: string) {
+  if (socket?.connected) socket.emit('presence:move', { x, y, facing });
+}
+export function sendPresenceEmote(kind: string) {
+  if (socket?.connected) socket.emit('presence:emote', { kind });
+}
+export function sendPresenceChat(phrase: number) {
+  if (socket?.connected) socket.emit('presence:chat', { phrase });
 }
 
 let summonWatchdog: ReturnType<typeof setTimeout> | null = null;
