@@ -11,6 +11,9 @@ export interface SolanaProvider {
   signMessage: (msg: Uint8Array, display?: string) => Promise<{ signature: Uint8Array } | Uint8Array>;
   /** The wallet signs AND submits the transaction, returning its signature. */
   signAndSendTransaction: (tx: Transaction) => Promise<{ signature: string }>;
+  /** Wallet events — Phantom/Solflare emit 'accountChanged' when the user switches accounts. */
+  on?: (event: string, handler: (...args: unknown[]) => void) => void;
+  off?: (event: string, handler: (...args: unknown[]) => void) => void;
 }
 declare global {
   interface Window {
@@ -72,4 +75,30 @@ export async function connectWallet(): Promise<WalletHandle> {
       return bs58.encode(toSignatureBytes(res));
     },
   };
+}
+
+let watchingAccount = false;
+/**
+ * Fire `cb` when the user switches the active account in their wallet extension
+ * (Phantom/Solflare emit `accountChanged`). `cb` gets the new public key as a
+ * base58 string, or null if the wallet disconnected/locked. Attaches once and
+ * retries until a provider is injected.
+ */
+export function watchAccountChange(cb: (publicKey: string | null) => void): void {
+  if (watchingAccount) return;
+  const attach = (): boolean => {
+    const p = detectWallet();
+    if (!p || typeof p.on !== 'function') return false;
+    p.on('accountChanged', (pk: unknown) => {
+      const next = pk && typeof (pk as { toString(): string }).toString === 'function'
+        ? (pk as { toString(): string }).toString()
+        : null;
+      cb(next);
+    });
+    watchingAccount = true;
+    return true;
+  };
+  if (attach()) return;
+  let tries = 0;
+  const iv = setInterval(() => { if (attach() || ++tries > 25) clearInterval(iv); }, 300);
 }

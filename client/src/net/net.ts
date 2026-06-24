@@ -145,6 +145,20 @@ function flushSave() {
 }
 
 // ---- lifecycle -------------------------------------------------------------
+/** Auto log-off when the user switches the active wallet account in their
+ *  extension — clear the session and reload to the LoginGate so they sign in
+ *  fresh as the new wallet (a different account / character). */
+function onWalletSwitch(newPublicKey: string | null): void {
+  const current = useNet.getState().wallet;
+  if (!current) return;                                // not signed in — nothing to do
+  if (newPublicKey && newPublicKey === current) return; // same account — no real switch
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(ACCOUNT_KEY);
+  } catch { /* ignore */ }
+  window.location.reload();
+}
+
 export function startNet() {
   if (started) return;
   started = true;
@@ -152,6 +166,8 @@ export function startNet() {
   // Don't lose a debounced save when the tab closes/navigates away.
   window.addEventListener('beforeunload', flushSave);
   window.addEventListener('pagehide', flushSave);
+  // Log off automatically when the user switches the active wallet in their extension.
+  import('./wallet.js').then(({ watchAccountChange }) => watchAccountChange(onWalletSwitch)).catch(() => {});
   if (import.meta.env.DEV) {
     (window as unknown as { __net: unknown }).__net = {
       useNet, findMatch, cancelMatch, submitMove, submitSwitch, forfeitMatch, connectWallet, refreshBalance, leaveResult, premiumSummon, emitQuestProgress, claimQuest,
