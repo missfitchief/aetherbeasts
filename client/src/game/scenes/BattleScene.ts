@@ -114,10 +114,10 @@ export class BattleScene extends Phaser.Scene {
     // Each HP box sits on the SAME side as its monster — enemy upper-right (by the
     // enemy sprite), player lower-left (by your sprite) — so it's always obvious
     // which beast is yours, instead of the box sitting diagonally across from it.
-    const e = this.makePanel(28, 30, this.state.enemy.creature, false);
+    const e = this.makePanel(W - PANEL_W - 28, 30, this.state.enemy.creature, false);
     this.enemyPanel = e.container;
     this.enemyHp = e.hp;
-    const p = this.makePanel(W - PANEL_W - 28, 196, this.state.player.creature, true);
+    const p = this.makePanel(28, 30, this.state.player.creature, true);
     this.playerPanel = p.container;
     this.playerHp = p.hp;
     this.expFill = p.exp!;
