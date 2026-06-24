@@ -50,7 +50,10 @@ export const DEFAULT_CONFIG: CharacterConfig = {
 
 // --- drawing helpers --------------------------------------------------------
 const shade = (c: RGB, f = 0.72): RGB => [Math.round(c[0] * f), Math.round(c[1] * f), Math.round(c[2] * f)];
-const OUTLINE: RGB = [26, 22, 30];
+const mix = (a: RGB, b: RGB, t: number): RGB => [Math.round(a[0] + (b[0] - a[0]) * t), Math.round(a[1] + (b[1] - a[1]) * t), Math.round(a[2] + (b[2] - a[2]) * t)];
+const lighten = (c: RGB, t = 0.24): RGB => mix(c, [255, 255, 255], t);
+const darken = (c: RGB, t = 0.26): RGB => mix(c, [0, 0, 0], t);
+const OUTLINE: RGB = [24, 20, 30];
 
 class Frame {
   buf: Uint8ClampedArray;
@@ -66,6 +69,11 @@ class Frame {
   alpha(x: number, y: number): number {
     if (x < 0 || x > 15 || y < 0 || y > 15) return 0;
     return this.buf[((this.oy + y) * SHEET_W + (this.ox + x)) * 4 + 3];
+  }
+  rgb(x: number, y: number): RGB | null {
+    if (x < 0 || x > 15 || y < 0 || y > 15) return null;
+    const i = ((this.oy + y) * SHEET_W + (this.ox + x)) * 4;
+    return this.buf[i + 3] ? [this.buf[i], this.buf[i + 1], this.buf[i + 2]] : null;
   }
 }
 
@@ -133,9 +141,11 @@ function drawCharacter(f: Frame, cfg: CharacterConfig, dir: number, frame: numbe
     f.px(6, hy + 2, OUTLINE);
   }
 
-  // ---- torso (shirt) ----
+  // ---- neck + torso (shirt) ----
+  f.rect(7, hy + 5, 2, 1, skinS);                          // neck connects head to body
   const ty = 8 + bob;
   f.rect(5, ty, 6, 4, top);
+  f.rect(6, ty, 4, 1, lighten(top, 0.18));                 // collar highlight
   f.rect(5, ty + 3, 6, 1, topS);                           // shirt hem shadow
   // arms (skin hands, shirt sleeves) — swing opposite to legs on the sides
   const armUp = dir === ROW_RIGHT || dir === ROW_LEFT;
@@ -163,6 +173,20 @@ function drawCharacter(f: Frame, cfg: CharacterConfig, dir: number, frame: numbe
 
   drawHair(f, cfg, dir, bob);
   drawHat(f, cfg, dir, bob);
+}
+
+// shading pass: rim-light the top/left edges and shadow the bottom/right edges
+// (light from top-left) so the flat fills read as a rounded, lit volume.
+function shadePass(f: Frame) {
+  const snap: (RGB | null)[] = [];
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) snap.push(f.rgb(x, y));
+  const at = (x: number, y: number) => (x < 0 || x > 15 || y < 0 || y > 15) ? null : snap[y * 16 + x];
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+    const c = at(x, y);
+    if (!c) continue;
+    if (!at(x, y - 1) || !at(x - 1, y)) f.px(x, y, lighten(c, 0.26));      // lit edge (top/left)
+    else if (!at(x, y + 1) || !at(x + 1, y)) f.px(x, y, darken(c, 0.3));   // shadow edge (bottom/right)
+  }
 }
 
 // outline pass: darken silhouette-edge pixels so the tiny sprite reads clearly.
@@ -206,6 +230,7 @@ export function drawSheet(cfg: CharacterConfig): Uint8ClampedArray {
     for (let frame = 0; frame < COLS; frame++) {
       const f = new Frame(buf, frame * FRAME, dir * FRAME);
       drawCharacter(f, cfg, dir, frame);
+      shadePass(f);
       outlinePass(f);
     }
   }
