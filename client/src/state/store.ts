@@ -101,6 +101,10 @@ export const useGame = create<GameStore>((set, get) => ({
   },
 
   startNewGame(name) {
+    // One character per wallet — never overwrite an existing tamer with a fresh
+    // save. If this account already has a party, just continue it.
+    const cur = get().save;
+    if (cur && cur.party.length > 0) { set({ screen: 'playing' }); return; }
     const id = getOrCreatePlayerId();
     const save = newSave(id, name.trim() || 'Tamer');
     set({ save, screen: 'starter', version: get().version + 1 });

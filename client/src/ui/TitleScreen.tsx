@@ -26,13 +26,21 @@ export function TitleScreen() {
         ))}
       </div>
 
-      {!naming ? (
+      {hasSave ? (
+        // One wallet = one character. A wallet that already has a tamer can only
+        // continue it — to start fresh you must connect a DIFFERENT wallet.
+        <div className="title-row" style={{ flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+          <button className="btn primary" onClick={continueGame}>
+            Continue — {save!.playerName}
+          </button>
+          <div className="muted small" style={{ maxWidth: 320, textAlign: 'center' }}>
+            One character per wallet. To start a new journey, connect a different wallet.
+          </div>
+        </div>
+      ) : !naming ? (
         <div className="title-row">
           <button className="btn primary" onClick={() => setNaming(true)}>
             New Journey
-          </button>
-          <button className="btn" disabled={!hasSave} onClick={continueGame}>
-            Continue{hasSave ? ` — ${save!.playerName}` : ''}
           </button>
         </div>
       ) : (
