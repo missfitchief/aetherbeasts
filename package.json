@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "concurrently": "^9.1.0",
-    "pngjs": "^7.0.0",
+    "jimp": "^0.22.10",
     "typescript": "^5.5.4"
   }
 }
