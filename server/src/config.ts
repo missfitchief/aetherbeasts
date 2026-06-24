@@ -53,6 +53,21 @@ export const LUMEN_ENABLED = process.env.LUMEN_ENABLED === 'true';
 export const EXCHANGE_ENABLED = process.env.EXCHANGE_ENABLED === 'true' && LUMEN_ENABLED && ONCHAIN_SUMMON_ENABLED;
 export const summonUsd = (count: number): number => (count >= 10 ? SUMMON_USD_10 : SUMMON_USD_1);
 
+// --- LUMEN -> $AETHER Exchange payout (treasury signer + ceilings) ----------
+/** Treasury signing key for cash-out payouts. NEVER logged. Set as a server SECRET
+ *  (base58 string or JSON-array secret key). Empty => the Exchange refuses real payouts. */
+export const TREASURY_SECRET_KEY = process.env.TREASURY_SECRET_KEY || '';
+/** Optional dev seed for the Rewards Pool, in $AETHER UI units (the bag you send to
+ *  the treasury wallet). Raising it tops the accounting pool up idempotently on boot. */
+export const REWARDS_POOL_SEED_AETHER = Number(process.env.REWARDS_POOL_SEED_AETHER || 0);
+/** Defense-in-depth payout ceilings (UI units; 0 = unlimited), independent of the pool. */
+export const PAYOUT_MAX_PER_TX_AETHER = Number(process.env.PAYOUT_MAX_PER_TX_AETHER || 0);
+export const PAYOUT_MAX_PER_DAY_AETHER = Number(process.env.PAYOUT_MAX_PER_DAY_AETHER || 0);
+const toBaseUnits = (ui: number): bigint => (ui > 0 && Number.isFinite(ui) ? BigInt(Math.round(ui * 10 ** AETHER_DECIMALS)) : 0n);
+export const REWARDS_POOL_SEED_BASE = toBaseUnits(REWARDS_POOL_SEED_AETHER);
+export const PAYOUT_MAX_PER_TX_BASE = toBaseUnits(PAYOUT_MAX_PER_TX_AETHER);
+export const PAYOUT_MAX_PER_DAY_BASE = toBaseUnits(PAYOUT_MAX_PER_DAY_AETHER);
+
 /** Fail fast on a misconfigured money path, and log the resolved on-chain state
  *  so a half-configured launch is visible instead of silent. Call once at boot. */
 export function validateConfig(): void {

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import type { SaveData, PublicProfile, QuestState } from '@aether/shared';
 import { STARTING_CREDITS, freshQuestState, rollOver, MIN_HOLD_DAYS, LUMEN_FAUCET } from '@aether/shared';
-import { DATABASE_URL } from './config.js';
+import { DATABASE_URL, REWARDS_POOL_SEED_BASE } from './config.js';
 
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // resume tokens expire after 30 days (sliding)
 
@@ -69,6 +69,7 @@ export class Store {
   async init() {
     if (!DATABASE_URL) {
       console.log('[store] in-memory mode (no DATABASE_URL set)');
+      this.rewardsPool = REWARDS_POOL_SEED_BASE; // seed the accounting pool (no persistence here)
       return;
     }
     try {
@@ -102,6 +103,18 @@ export class Store {
       const { rows: metaRows } = await pool.query(`SELECT value FROM meta WHERE key = 'rewardsPool'`);
       if (metaRows[0]?.value) { try { this.rewardsPool = BigInt(metaRows[0].value); } catch { /* keep 0 */ } }
       this.pool = pool; // only switch to DB mode once it's fully reachable
+      // Idempotent dev seed: raise the pool by any INCREASE in the configured seed
+      // (so the operator can top it up by bumping REWARDS_POOL_SEED_AETHER, once).
+      const { rows: seedRows } = await pool.query(`SELECT value FROM meta WHERE key = 'rewardsPoolSeedApplied'`);
+      const seedApplied = seedRows[0]?.value ? BigInt(seedRows[0].value) : 0n;
+      if (REWARDS_POOL_SEED_BASE > seedApplied) {
+        this.rewardsPool += REWARDS_POOL_SEED_BASE - seedApplied;
+        await pool.query(
+          `INSERT INTO meta (key, value) VALUES ('rewardsPoolSeedApplied', $1) ON CONFLICT (key) DO UPDATE SET value = $1`,
+          [REWARDS_POOL_SEED_BASE.toString()],
+        );
+        await this.persistPool();
+      }
       console.log(`[store] postgres mode, hydrated ${rows.length} player(s)`);
     } catch (e) {
       // A bad/unreachable DATABASE_URL must NOT take the server down — fall back to
