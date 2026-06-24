@@ -28,6 +28,14 @@ interface HpBar {
   redraw: (pct: number) => void;
 }
 
+const toHex = (c: unknown): number => (typeof c === 'number' ? c : parseInt(String(c).replace('#', ''), 16) || 0x9aa3b2);
+/** Glossy HP-bar fill colours (top highlight, bottom shade) by remaining fraction. */
+function hpPair(pct: number): [number, number] {
+  if (pct > 0.5) return [0x7bed90, 0x35a850];
+  if (pct > 0.2) return [0xffdc63, 0xd89a1e];
+  return [0xf47672, 0xc23430];
+}
+
 export class BattleScene extends Phaser.Scene {
   private state!: BattleState;
 
@@ -120,20 +128,44 @@ export class BattleScene extends Phaser.Scene {
 
   private makePanel(x: number, y: number, c: Creature, isPlayer: boolean): { container: Phaser.GameObjects.Container; hp: HpBar; exp?: Phaser.GameObjects.Rectangle } {
     const w = PANEL_W;
+    const h = isPlayer ? 56 : 44;
+    const accent = isPlayer ? 0xffd166 : 0x8be0ff; // gold = you, cyan = enemy
     const cont = this.add.container(x, y).setDepth(50);
+
+    // panel: soft vertical gradient + a crisp accent border
     const box = this.add.graphics();
-    box.fillStyle(0x0d1526, 0.92);
-    box.fillRoundedRect(0, 0, w, isPlayer ? 50 : 40, 6);
-    // Your box gets a warm gold border; the enemy's stays cyan — a second at-a-glance cue.
-    box.lineStyle(2, isPlayer ? 0xffd166 : 0x8be0ff, 0.85);
-    box.strokeRoundedRect(0, 0, w, isPlayer ? 50 : 40, 6);
+    box.fillGradientStyle(0x1b2d4d, 0x1b2d4d, 0x0a1120, 0x0a1120, 0.96);
+    box.fillRoundedRect(0, 0, w, h, 9);
+    box.lineStyle(2, accent, 0.9);
+    box.strokeRoundedRect(0, 0, w, h, 9);
     cont.add(box);
 
-    const name = this.add.text(10, 6, displayName(c), { fontFamily: 'monospace', fontSize: '13px', color: '#ffffff' });
-    const lv = this.add.text(w - 44, 6, `Lv${c.level}`, { fontFamily: 'monospace', fontSize: '12px', color: '#ffd166' });
-    cont.add([name, lv]);
+    const name = this.add.text(12, 7, displayName(c), { fontFamily: 'monospace', fontSize: '13px', color: '#ffffff' });
+    cont.add(name);
+
+    // type pips beside the name (colour = type — a quick read of the matchup)
+    let px = 12 + name.width + 8;
+    for (const t of getSpecies(c.speciesId).types) {
+      const pip = this.add.graphics();
+      pip.fillStyle(toHex(TYPE_COLOR[t]), 1);
+      pip.fillRoundedRect(px, 9, 10, 10, 3);
+      pip.lineStyle(1, 0x0a1120, 0.9);
+      pip.strokeRoundedRect(px, 9, 10, 10, 3);
+      cont.add(pip);
+      px += 13;
+    }
+
+    // Lv pill, top-right
+    const lvW = 32;
+    const lvPill = this.add.graphics();
+    lvPill.fillStyle(0x0a1120, 0.85);
+    lvPill.fillRoundedRect(w - lvW - 9, 6, lvW, 15, 7);
+    lvPill.lineStyle(1, accent, 0.55);
+    lvPill.strokeRoundedRect(w - lvW - 9, 6, lvW, 15, 7);
+    const lv = this.add.text(w - 9 - lvW / 2, 13.5, `Lv${c.level}`, { fontFamily: 'monospace', fontSize: '11px', color: '#ffd166' }).setOrigin(0.5);
+    cont.add([lvPill, lv]);
+
     if (isPlayer) {
-      // A small "YOU" chip riding the top-left corner removes any doubt.
       const you = this.add.text(8, -9, 'YOU', {
         fontFamily: 'monospace', fontSize: '9px', color: '#1a1410',
         backgroundColor: '#ffd166', padding: { x: 4, y: 1 },
@@ -141,31 +173,37 @@ export class BattleScene extends Phaser.Scene {
       cont.add(you);
     }
 
-    // hp bar
-    const barX = 10;
-    const barY = 26;
-    const barW = w - 20;
+    // hp bar: recessed track + glossy gradient fill
+    const barX = 12, barY = isPlayer ? 29 : 27, barW = w - 24, barH = 11, r = barH / 2;
     const hpBg = this.add.graphics();
-    hpBg.fillStyle(0x000000, 0.6);
-    hpBg.fillRoundedRect(barX, barY, barW, 7, 3);
+    hpBg.fillStyle(0x05070d, 0.9);
+    hpBg.fillRoundedRect(barX, barY, barW, barH, r);
+    hpBg.lineStyle(1, 0x33415e, 0.9);
+    hpBg.strokeRoundedRect(barX, barY, barW, barH, r);
     cont.add(hpBg);
     const hpFill = this.add.graphics();
     cont.add(hpFill);
     const redraw = (pct: number) => {
       hpFill.clear();
-      const col = pct > 0.5 ? 0x53d769 : pct > 0.2 ? 0xf5c542 : 0xe5484d;
-      hpFill.fillStyle(col, 1);
-      hpFill.fillRoundedRect(barX, barY, Math.max(0, barW * pct), 7, 3);
+      const p = Math.max(0, Math.min(1, pct));
+      const fw = (barW - 2) * p;
+      if (fw <= 0.5) return;
+      const [c1, c2] = hpPair(p);
+      hpFill.fillGradientStyle(c1, c1, c2, c2, 1);
+      hpFill.fillRoundedRect(barX + 1, barY + 1, fw, barH - 2, (barH - 2) / 2);
+      hpFill.fillStyle(0xffffff, 0.3); // gloss highlight
+      hpFill.fillRoundedRect(barX + 2, barY + 1.5, Math.max(1, fw - 2), Math.max(1, (barH - 2) / 2.8), (barH - 2) / 3);
     };
     redraw(c.currentHp / statOf(c, 'mhp'));
 
     let exp: Phaser.GameObjects.Rectangle | undefined;
     if (isPlayer) {
-      const hpNum = this.add.text(w - 70, 34, `${c.currentHp}/${statOf(c, 'mhp')}`, { fontFamily: 'monospace', fontSize: '10px', color: '#cbd5e1' });
+      const hpLabel = this.add.text(12, 43, 'HP', { fontFamily: 'monospace', fontSize: '9px', color: '#7e8aa0' });
+      const hpNum = this.add.text(w - 12, 43, `${c.currentHp}/${statOf(c, 'mhp')}`, { fontFamily: 'monospace', fontSize: '10px', color: '#cbd5e1' }).setOrigin(1, 0);
       hpNum.setName('hpnum');
-      cont.add(hpNum);
-      const expBg = this.add.rectangle(10, 45, barW, 3, 0x223049).setOrigin(0, 0.5);
-      exp = this.add.rectangle(10, 45, barW * expProgress(c), 3, 0x4aa3ff).setOrigin(0, 0.5);
+      cont.add([hpLabel, hpNum]);
+      const expBg = this.add.rectangle(12, 52, barW, 3, 0x223049).setOrigin(0, 0.5);
+      exp = this.add.rectangle(12, 52, barW * expProgress(c), 3, 0x4aa3ff).setOrigin(0, 0.5);
       cont.add([expBg, exp]);
     }
     return { container: cont, hp: { redraw }, exp };
