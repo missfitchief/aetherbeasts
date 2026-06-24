@@ -45,6 +45,20 @@ export const ENCOUNTER_ZONES: Record<string, EncounterZone> = {
       { species: 'drachnid', weight: 18 },
       { species: 'spookshroom', weight: 18 },
       { species: 'jestar', weight: 14 },
+      { species: 'magmaclaw', weight: 4 },   // rare elite variant
+      { species: 'cindermaw', weight: 5 },   // rare elite variant
+    ],
+  },
+  aetherleague: {
+    id: 'aetherleague',
+    name: 'Aether League Rift',
+    levelRange: [30, 42],
+    table: [
+      { species: 'voidmanita', weight: 12 },   // the rift's signature elites
+      { species: 'prismleviath', weight: 12 },
+      { species: 'magmaclaw', weight: 6 },
+      { species: 'cindermaw', weight: 6 },
+      { species: 'wraithmanita', weight: 5 },
     ],
   },
 };
@@ -74,6 +88,7 @@ export function scaledWildLevel(zone: EncounterZone, partyTopLevel: number, rng:
 // ---------------------------------------------------------------------------
 const DAILY_BOSS_POOL = [
   'charachne', 'leviocean', 'flowrath', 'pidgreat', 'cardemon', 'shroomole', 'wraithmanita', 'ratssive',
+  'magmaclaw', 'cindermaw', 'voidmanita', 'prismleviath', // the new elite variants
 ];
 export const DAILY_BOSS_REWARD = 500; // ◈ awarded for beating today's boss
 

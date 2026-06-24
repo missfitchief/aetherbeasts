@@ -150,6 +150,36 @@ const RAW: RawSpecies[] = [
     evo: [],
     desc: 'As its anger intensifies, the ghost manifests more physically — the half-ethereal mushroom grows larger, furthering the infection.',
   },
+
+  // --- Elite variants: rare, stronger forms unlocked in the later zones -------
+  {
+    id: 'magmaclaw', name: 'Magmaclaw', types: ['fire'], weights: [356, 12, 6, 13, 24, 18, 8],
+    expGroup: 'mid', rarity: 'rare',
+    learn: [[1, 'tackle'], [1, 'unnerve'], [1, 'fireweb'], [15, 'fireball'], [25, 'magictrance']],
+    evo: [],
+    desc: "An ancient Charachne that bathed in Emberhollow's magma heart. Its chitin runs molten gold and never truly cools.",
+  },
+  {
+    id: 'cindermaw', name: 'Cindermaw', types: ['normal'], weights: [332, 9, 11, 17, 4, 17, 6],
+    expGroup: 'mid', rarity: 'rare',
+    learn: [[1, 'tackle'], [1, 'tailwag'], [14, 'blindingsand'], [19, 'bite'], [27, 'unnerve']],
+    evo: [],
+    desc: 'A Ratssive that nested in the deepest ash. Its scavenged armor fused into charred, spectral steel.',
+  },
+  {
+    id: 'voidmanita', name: 'Voidmanita', types: ['ghost'], weights: [368, 17, 10, 12, 15, 12, 14],
+    expGroup: 'mid', rarity: 'rare',
+    learn: [[1, 'ectoplasm'], [1, 'poisonspore'], [13, 'haunt'], [22, 'mushroommissile'], [30, 'magictrance']],
+    evo: [],
+    desc: 'A Wraithmanita touched by the rift between worlds. Its spores drift through reality itself, blooming in the Aether League.',
+  },
+  {
+    id: 'prismleviath', name: 'Prismleviath', types: ['water'], weights: [356, 12, 14, 12, 10, 12, 15],
+    expGroup: 'mid', rarity: 'rare',
+    learn: [[1, 'tackle'], [1, 'diverge'], [1, 'boombubble'], [15, 'whirlcutter'], [25, 'bite']],
+    evo: [],
+    desc: "A Leviocean risen in the Aether League's light. Its scales refract every colour of the rift.",
+  },
 ];
 
 export const SPECIES: Record<string, Species> = Object.fromEntries(
