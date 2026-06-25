@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import type { SaveData, PublicProfile, QuestState } from '@aether/shared';
-import { STARTING_CREDITS, freshQuestState, rollOver, MIN_HOLD_DAYS, LUMEN_FAUCET } from '@aether/shared';
-import { DATABASE_URL, REWARDS_POOL_SEED_BASE } from './config.js';
+import { STARTING_CREDITS, freshQuestState, rollOver, MIN_HOLD_DAYS, LUMEN_FAUCET, rankedWinLumen, LUMEN_MILESTONES } from '@aether/shared';
+import { DATABASE_URL, REWARDS_POOL_SEED_BASE, LUMEN_ENABLED } from './config.js';
 
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // resume tokens expire after 30 days (sliding)
 
@@ -262,9 +262,25 @@ export class Store {
     // Drop a stale snapshot: a late, in-flight pre-summon push must not clobber a
     // newer server-authored save (e.g. a paid pull that just granted beasts).
     if (rec.save && (save.updatedAt ?? 0) < (rec.save.updatedAt ?? 0)) return;
+    if (LUMEN_ENABLED) this.grantGameplayMilestones(rec, save); // one-time PvE milestones, idempotent
     rec.name = cleanName(save.playerName) || rec.name; // same sanitizer as account creation
     rec.save = save;
     this.queuePersist(rec);
+  }
+
+  /** Grant one-time LUMEN for newly-reached gameplay milestones (gym/Champion badges)
+   *  + the daily-boss clear, by diffing the incoming save against the stored one.
+   *  Idempotent via grantLumenOnce keys. Called from saveProgress before the overwrite. */
+  private grantGameplayMilestones(rec: PlayerRecord, save: SaveData): void {
+    const had = new Set(rec.save?.badges ?? []);
+    for (const b of save.badges ?? []) {
+      const amt = LUMEN_MILESTONES[b];
+      if (amt && !had.has(b)) this.grantLumenOnce(rec.id, `badge:${b}`, amt, 'milestone');
+    }
+    const boss = save.lastDailyBoss;
+    if (boss && boss !== (rec.save?.lastDailyBoss ?? '')) {
+      this.grantLumenOnce(rec.id, `boss:${boss}`, LUMEN_FAUCET.dailyBoss, 'daily_boss');
+    }
   }
 
   /**
@@ -450,8 +466,9 @@ export class Store {
     if (r.rankedLumen.date !== day) { r.rankedLumen.date = day; r.rankedLumen.count = 0; }
     if (r.rankedLumen.count >= LUMEN_FAUCET.rankedWinDailyCap) return 0;
     r.rankedLumen.count += 1;
-    this.grantLumen(id, LUMEN_FAUCET.rankedWin, 'ranked_win');
-    return LUMEN_FAUCET.rankedWin;
+    const amount = rankedWinLumen(r.rating); // scales with the player's rank — skill pays
+    this.grantLumen(id, amount, 'ranked_win');
+    return amount;
   }
   /** Season-Point milestone LUMEN. Uses a monotonic tier counter (NOT a prunable
    *  idempotency key) so a long-lived account can never re-mint past milestones. */

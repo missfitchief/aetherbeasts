@@ -78,6 +78,9 @@ let drips = 0;
 for (let i = 0; i < 15; i++) if (store.grantRankedWinLumen(F.id, fday) > 0) drips++;
 assert(drips === 10, 'ranked-win LUMEN is capped at 10/day');
 
+const RW = store.createWallet('WALLET_RANKWIN'); // default rating 1000 = Silver
+assert(store.grantRankedWinLumen(RW.id, Date.now()) === 0.5, 'ranked-win LUMEN scales with rank (Silver = 0.5)');
+
 console.log('✅ LUMEN faucet tests passed');
 
 // --- tau governor: rolling 7-day redeem ratio -----------------------------

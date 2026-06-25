@@ -19,6 +19,8 @@
  * plain number (it is low-velocity and small).
  */
 
+import { rankOf } from './ranked.js';
+
 // ---- economic constants (tunable; mirror server config at launch) -----------
 export const LUMEN_PEG_USD = 0.01;        // reference value of 1 LUMEN, in USD
 export const POOL_FUNDING_RATE = 0.30;    // share of premium-pull revenue ring-fenced for payouts
@@ -37,17 +39,31 @@ export const TAU_STRESS_FROM = 0.8;       // tau starts rising once rollingRatio
 export const ELIGIBILITY_MIN_PURCHASES = 1;   // must have bought >=1 premium pull to ever cash out
 export const ELIGIBILITY_WALLET_AGE_DAYS = 30; // ...and the wallet must be at least this old
 
-/** LUMEN faucet base rates (Season 1, before the seasonal emission multiplier). */
+/** LUMEN faucet base rates — earned by PLAYING, not by logging in (Season 1). */
 export const LUMEN_FAUCET = {
-  dailyQuestsCleared: 3,   // grant when all 3 dailies are claimed
-  weeklyQuestsCleared: 20, // grant when all weeklies are claimed
-  rankedWin: 0.5,          // per ranked PvP win (server-settled), capped below
-  rankedWinDailyCap: 10,   // at most 10 ranked wins/day count -> +5 LUMEN/day
-  dailyBoss: 2,            // defeat the daily boss
-  loginDay7: 5,            // the 7th login-calendar slot
+  dailyQuestsCleared: 3,    // clear all 3 daily quests (gameplay tasks: battle/catch/etc.)
+  weeklyQuestsCleared: 20,  // clear all weeklies
+  rankedWinDailyCap: 10,    // at most 10 ranked wins/day earn LUMEN (amount scales with rank — see RANKED_WIN_LUMEN)
+  dailyBoss: 2,             // beat the Daily Boss
   seasonPointMilestone: 10, // per 500 Season Points, claim-once each
   seasonPointStep: 500,
 } as const;
+
+/** LUMEN per ranked PvP win, by rank name — skill pays (capped at rankedWinDailyCap/day). */
+export const RANKED_WIN_LUMEN: Record<string, number> = {
+  Bronze: 0.3, Silver: 0.5, Gold: 0.8, Platinum: 1.2, Diamond: 1.5, Master: 2.0,
+};
+/** LUMEN for a ranked win at the given rating's rank. */
+export function rankedWinLumen(rating: number): number {
+  return RANKED_WIN_LUMEN[rankOf(rating).name] ?? RANKED_WIN_LUMEN.Bronze;
+}
+
+/** One-time LUMEN for first-time gameplay milestones (badge id → LUMEN). Idempotent. */
+export const LUMEN_MILESTONES: Record<string, number> = {
+  verdant: 8,   // Verdant Badge — 1st gym
+  ember: 12,    // Ember Badge — 2nd gym (unlocks the Aether League)
+  champion: 40, // beat the Aether Champion
+};
 
 /** LUMEN sink prices (give players in-game reasons to SPEND LUMEN, not just cash out). */
 export const LUMEN_SINK = {

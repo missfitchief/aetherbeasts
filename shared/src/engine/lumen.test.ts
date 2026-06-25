@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   emissionFactor, tau, poolCreditFromRevenue, redeemQuote, isRedeemEligible,
-  TAU_FLOOR, TAU_MAX, REDEEM_MIN_LUMEN, POOL_FUNDING_RATE,
+  TAU_FLOOR, TAU_MAX, REDEEM_MIN_LUMEN, POOL_FUNDING_RATE, rankedWinLumen, RANKED_WIN_LUMEN,
 } from './lumen.js';
 
 describe('emission + tax governors', () => {
@@ -71,6 +71,15 @@ describe('redeemQuote', () => {
     const stressed = redeemQuote({ ...base, lumenRequested: 50, rollingRatio: 2 });
     expect(stressed.tau).toBeGreaterThan(calm.tau);
     expect(stressed.aetherBaseUnits).toBeLessThan(calm.aetherBaseUnits);
+  });
+});
+
+describe('gameplay earning', () => {
+  it('ranked-win LUMEN scales with rank', () => {
+    expect(rankedWinLumen(0)).toBe(RANKED_WIN_LUMEN.Bronze);
+    expect(rankedWinLumen(1000)).toBe(RANKED_WIN_LUMEN.Silver);
+    expect(rankedWinLumen(1600)).toBe(RANKED_WIN_LUMEN.Master);
+    expect(rankedWinLumen(99999)).toBe(RANKED_WIN_LUMEN.Master);
   });
 });
 

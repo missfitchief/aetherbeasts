@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { Server, type Socket } from 'socket.io';
 import type { SaveData, PlayerAction, SummonReport, QuestProgressType, PresenceEnterMsg, PresenceMoveMsg } from '@aether/shared';
-import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, claimLoginReward, addItem, toQuestView, poolCreditFromRevenue, LUMEN_FAUCET, utcDate, redeemQuote, isRedeemEligible, REDEEM_MIN_LUMEN } from '@aether/shared';
+import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, claimLoginReward, addItem, toQuestView, poolCreditFromRevenue, LUMEN_FAUCET, redeemQuote, isRedeemEligible, REDEEM_MIN_LUMEN } from '@aether/shared';
 import { PORT, corsOrigin, TREASURY_ADDRESS, AETHER_MINT, AETHER_DECIMALS, QUOTE_TTL_MS, ONCHAIN_SUMMON_ENABLED, LUMEN_ENABLED, EXCHANGE_ENABLED, validateConfig } from './config.js';
 import { Store, publicProfile, type PlayerRecord } from './store.js';
 import { buildLoginMessage, verifySignature } from './auth.js';
@@ -283,11 +283,8 @@ function bind(socket: Socket) {
     if (res.reward.itemId) addItem(rec.save, res.reward.itemId, res.reward.qty ?? 1);
     rec.save.updatedAt = Math.max((rec.save.updatedAt ?? 0) + 1, now);
     store.saveProgress(id, rec.save);
-    // Day-7 login slot also drips a little LUMEN (gated, once per cycle).
-    if (LUMEN_ENABLED && res.day === 7) {
-      store.grantLumenOnce(id, `login7:${utcDate(now)}`, LUMEN_FAUCET.loginDay7, 'login7');
-      socket.emit('profile:update', publicProfile(rec));
-    }
+    // Login grants GLINT only (soft currency) — the cashable token is earned by PLAYING,
+    // not by logging in (ranked wins, boss/Champion clears, milestones).
     socket.emit('login:claimed', { day: res.day, reward: res.reward, view: toQuestView(qs, now) });
   });
 
