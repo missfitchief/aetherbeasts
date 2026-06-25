@@ -56,6 +56,8 @@ Two panic buttons exist at all times:
      (default `0` = unlimited; the only backstop independent of the pool accounting). Suggested: per-tx ≈
      the $AETHER value of one full 50-LUMEN redeem at launch price; per-day ≈ a multiple of expected
      daily redeemers.
+   - (optional) `STAKED_PVP_ENABLED` = `true` opens LUMEN PvP wagers; if you enable it, ALSO set
+     `WAGER_HOLD_DAYS` > 0 (anti-laundering — see §E).
 
 4. Render redeploys. **Verify the boot logs:**
    - `[config] on-chain summons ENABLED (mint=… treasury=… mode=mainnet)`
@@ -114,6 +116,24 @@ finding independently verified) audited the **instant-withdrawal** economy. Verd
   · durable `DATABASE_URL` (pool solvency + used-sig ledger need Postgres) · `TREASURY_SECRET_KEY` as a secret.
 - **Nice-to-have (deferred):** persist the burn-tax (tau) 7-day window so it can't reset to floor on a
   restart (low economic impact, all inside the pool envelope).
+
+### Staked PvP wagers (audited 2026-06-25)
+
+A 4-lens red-team audited the LUMEN wager engine. Verdict: **safe-with-fixes**. The engine is
+**value-conserving** — winnings come only from the loser's stake, the 10% rake is burned, the pool is
+never touched, the rake math is exact (no rounding leak), and double-settlement is blocked. The one real
+risk: instant-redeemable winnings make it a **sybil-laundering rail** (funnel many feeder accounts' LUMEN
+into one gated cash-out wallet). Bounded by the pool invariant + the per-wallet cost + the rake.
+
+**Before enabling `STAKED_PVP_ENABLED=true`:**
+- [ ] **Set `WAGER_HOLD_DAYS` > 0** (e.g. 1–3). Wager winnings then aren't redeemable for that many days
+      (still spendable / re-wagerable), killing the instant launder-and-cash-out loop. Default 0 = no hold.
+- [ ] `TOKEN_MODE=mainnet` (already required) — the sim/dev bypass voids the 30-day wallet gate, the main
+      barrier against aggregation.
+- [ ] Non-zero payout ceilings (already required) — cap a single-burst drain even if aggregation succeeds.
+
+The 10% rake + [10/50/100] tiers are confirmed correct; keep them. Staked PvP is the clearest real-money
+gambling in the design — enable deliberately, with counsel.
 
 ## F. Rollback
 
