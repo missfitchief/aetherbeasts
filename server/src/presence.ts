@@ -46,6 +46,7 @@ export class PresenceManager {
       y: clampCoord(p.y),
       facing: String(p.facing || 'down'),
       sprite: String(p.sprite || 'hero'),
+      battling: prev?.battling ?? false, // preserved across a reconnect re-enter
     };
     this.byPlayer.set(playerId, rec);
     socket.join(room(p.map));
@@ -70,6 +71,14 @@ export class PresenceManager {
     const rec = this.byPlayer.get(playerId);
     if (!rec || !EMOTES.includes(kind as Emote)) return; // fixed set only
     this.io.to(room(rec.map)).emit('presence:emoted', { id: playerId, kind }); // include sender (own bubble)
+  }
+
+  /** Flag a player as in/out of battle — relayed so others on the map show a ⚔ marker. */
+  setBattling(playerId: string, battling: boolean): void {
+    const rec = this.byPlayer.get(playerId);
+    if (!rec || rec.battling === battling) return;
+    rec.battling = battling;
+    this.io.to(room(rec.map)).emit('presence:status', { id: playerId, battling });
   }
 
   /** Free-text chat, relayed to everyone on the sender's map. Length-clamped +

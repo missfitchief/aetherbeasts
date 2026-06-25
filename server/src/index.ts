@@ -392,6 +392,10 @@ function bind(socket: Socket) {
     const id = pid();
     if (id && p) presence.emote(id, String(p.kind ?? ''));
   });
+  socket.on('presence:status', (p: { battling?: boolean }) => {
+    const id = pid();
+    if (id && p) presence.setBattling(id, !!p.battling);
+  });
   socket.on('presence:chat', (p: { text?: string }) => {
     const id = pid();
     if (id && p) presence.chat(id, String(p.text ?? ''));

@@ -308,6 +308,7 @@ function wire(s: Socket) {
   s.on('presence:joined', (p: { player: PresencePlayer }) => p?.player && presenceHandler?.({ type: 'joined', player: p.player }));
   s.on('presence:moved', (p: { id: string; x: number; y: number; facing: string }) => presenceHandler?.({ type: 'moved', ...p }));
   s.on('presence:left', (p: { id: string }) => presenceHandler?.({ type: 'left', id: p?.id }));
+  s.on('presence:status', (p: { id: string; battling: boolean }) => p?.id && presenceHandler?.({ type: 'status', id: p.id, battling: !!p.battling }));
   s.on('presence:emoted', (p: { id: string; kind: string }) => presenceHandler?.({ type: 'emoted', ...p }));
   s.on('presence:said', (p: { id: string; name: string; text: string }) => {
     if (p?.text) useChat.getState().push({ id: p.id, name: p.name || 'Tamer', text: p.text });
@@ -565,7 +566,8 @@ export type PresenceEvent =
   | { type: 'joined'; player: PresencePlayer }
   | { type: 'moved'; id: string; x: number; y: number; facing: string }
   | { type: 'left'; id: string }
-  | { type: 'emoted'; id: string; kind: string };
+  | { type: 'emoted'; id: string; kind: string }
+  | { type: 'status'; id: string; battling: boolean };
 
 /** A free-text chat message in the live overworld (rendered in the corner ChatBox). */
 export interface ChatMsg { key: number; id: string; name: string; text: string; }
@@ -580,6 +582,9 @@ let presenceHandler: ((ev: PresenceEvent) => void) | null = null;
 export function setPresenceHandler(fn: ((ev: PresenceEvent) => void) | null) { presenceHandler = fn; }
 
 let lastPresenceEnter: { map: string; x: number; y: number; facing: string; sprite: string } | null = null;
+export function sendPresenceStatus(battling: boolean) {
+  if (socket?.connected) socket.emit('presence:status', { battling });
+}
 export function sendPresenceEnter(map: string, x: number, y: number, facing: string, sprite: string) {
   lastPresenceEnter = { map, x, y, facing, sprite }; // remembered so we can re-join on (re)connect
   if (socket?.connected) socket.emit('presence:enter', lastPresenceEnter);

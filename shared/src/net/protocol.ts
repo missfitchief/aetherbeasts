@@ -148,6 +148,7 @@ export interface PresencePlayer {
   y: number;
   facing: string;
   sprite: string;
+  battling?: boolean; // currently in a battle — show a ⚔ marker over them
 }
 export interface PresenceEnterMsg { map: string; x: number; y: number; facing: string; sprite: string }
 export interface PresenceMoveMsg { x: number; y: number; facing: string }

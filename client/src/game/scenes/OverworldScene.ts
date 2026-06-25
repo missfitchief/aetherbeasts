@@ -8,7 +8,7 @@ import {
 } from '@aether/shared';
 import { getMap, TILE, ROUTE_START_Y, OBJ_DEF, type WorldMap, type Tile, type Npc, type Interactable } from '../world/maps.js';
 import { useGame } from '../../state/store.js';
-import { useNet, setPresenceHandler, sendPresenceEnter, sendPresenceMove, type PresenceEvent } from '../../net/net.js';
+import { useNet, setPresenceHandler, sendPresenceEnter, sendPresenceMove, sendPresenceStatus, type PresenceEvent } from '../../net/net.js';
 import { audio } from '../audio.js';
 import { monSpriteUrl, assetUrl } from '../assets.js';
 import { generateTileArt } from '../world/tileart.js';
@@ -87,7 +87,7 @@ export class OverworldScene extends Phaser.Scene {
   private busy = false;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private npcSprites = new Map<string, Phaser.GameObjects.Sprite>();
-  private remotePlayers = new Map<string, { c: Phaser.GameObjects.Container; spr: Phaser.GameObjects.Sprite; bubble?: Phaser.GameObjects.Text; tween?: Phaser.Tweens.Tween }>();
+  private remotePlayers = new Map<string, { c: Phaser.GameObjects.Container; spr: Phaser.GameObjects.Sprite; bubble?: Phaser.GameObjects.Text; tween?: Phaser.Tweens.Tween; icon?: Phaser.GameObjects.Text }>();
   private myId = '';
   /** Texture key for the local player's avatar (a base sheet, or 'sheet_me' if recolored). */
   private playerSheet = 'sheet_player';
@@ -189,6 +189,9 @@ export class OverworldScene extends Phaser.Scene {
     // Live presence: render other players on this map + announce ourselves.
     setPresenceHandler((ev) => this.onPresence(ev));
     this.enterPresence();
+    // Tell others when we enter a battle (scene pauses) / return (scene resumes) → ⚔ marker.
+    this.events.on('pause', () => sendPresenceStatus(true));
+    this.events.on('resume', () => sendPresenceStatus(false));
 
     // Overworld renders 1:1 (small character like the engine); interiors zoom in.
     this.applyCamera();
@@ -346,20 +349,35 @@ export class OverworldScene extends Phaser.Scene {
 
   private onPresence(ev: PresenceEvent): void {
     switch (ev.type) {
-      case 'roster': for (const p of ev.players) this.addRemote(p.id, p.name, p.x, p.y, p.facing); break;
-      case 'joined': this.addRemote(ev.player.id, ev.player.name, ev.player.x, ev.player.y, ev.player.facing); break;
+      case 'roster': for (const p of ev.players) this.addRemote(p.id, p.name, p.x, p.y, p.facing, p.battling); break;
+      case 'joined': this.addRemote(ev.player.id, ev.player.name, ev.player.x, ev.player.y, ev.player.facing, ev.player.battling); break;
       case 'moved': this.moveRemote(ev.id, ev.x, ev.y, ev.facing); break;
       case 'left': this.removeRemote(ev.id); break;
       case 'emoted': this.showBubble(ev.id, EMOTE_EMOJI[ev.kind] ?? '❓'); break;
+      case 'status': this.setRemoteBattling(ev.id, ev.battling); break;
     }
   }
 
-  private addRemote(id: string, name: string, x: number, y: number, facing: string): void {
+  private addRemote(id: string, name: string, x: number, y: number, facing: string, battling?: boolean): void {
     if (!id || id === this.myId || this.remotePlayers.has(id)) return;
     const spr = this.add.sprite(0, 0, 'sheet_player', idleFrame(this.dirOf(facing))).setOrigin(0.5, 0.85).setAlpha(0.92);
     const label = this.add.text(0, -TILE * 0.95, name, { fontSize: '10px', color: '#9fe0ff' }).setOrigin(0.5, 1);
     const c = this.add.container(x * TILE + TILE / 2, y * TILE + TILE * 0.85, [spr, label]).setDepth(y * TILE + TILE);
     this.remotePlayers.set(id, { c, spr });
+    if (battling) this.setRemoteBattling(id, true);
+  }
+
+  /** Show/hide a ⚔ marker over a remote player while they're in a battle. */
+  private setRemoteBattling(id: string, battling: boolean): void {
+    const r = this.remotePlayers.get(id);
+    if (!r) return;
+    if (battling && !r.icon) {
+      r.icon = this.add.text(0, -TILE * 1.55, '⚔️', { fontSize: '13px' }).setOrigin(0.5, 1);
+      r.c.add(r.icon);
+    } else if (!battling && r.icon) {
+      r.icon.destroy();
+      r.icon = undefined;
+    }
   }
 
   private moveRemote(id: string, x: number, y: number, facing: string): void {
