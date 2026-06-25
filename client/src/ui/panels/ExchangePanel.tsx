@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useGame } from '../../state/store.js';
 import { useNet, quoteExchange, redeemExchange } from '../../net/net.js';
 import { Modal } from '../Panels.js';
+import { REDEEM_MIN_LUMEN } from '@aether/shared';
 
 /** The Aether Exchange: convert the cashable LUMEN token to on-chain $AETHER.
  *  One-way, server-authoritative, paid from a revenue-funded Rewards Pool. */
@@ -11,7 +12,7 @@ export function ExchangePanel() {
   const quote = useNet((s) => s.exchangeQuote);
   const busy = useNet((s) => s.exchangeBusy);
   const enabled = useNet((s) => s.exchangeEnabled);
-  const [amount, setAmount] = useState(50);
+  const [amount, setAmount] = useState(REDEEM_MIN_LUMEN);
 
   const lumen = profile?.lumen ?? 0;
 
@@ -28,7 +29,7 @@ export function ExchangePanel() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <label className="small">Convert{' '}
             <input
-              type="number" min={1} value={amount}
+              type="number" min={REDEEM_MIN_LUMEN} value={amount}
               onChange={(e) => setAmount(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
               style={{ width: 90 }}
             />{' '}LUMEN
@@ -47,7 +48,7 @@ export function ExchangePanel() {
                 <Row label="You receive" value={`${quote.aether} $AETHER`} strong />
               </>
             )}
-            <div className="small muted">Redeemable: {quote.redeemable} · daily left: {quote.dailyRemaining} · weekly left: {quote.weeklyRemaining}</div>
+            <div className="small muted">Min {REDEEM_MIN_LUMEN} · redeemable {quote.redeemable} · daily left {quote.dailyRemaining} · weekly left {quote.weeklyRemaining}</div>
           </div>
         )}
 
@@ -55,8 +56,9 @@ export function ExchangePanel() {
           Cash out{quote?.ok ? ` → ${quote.aether} $AETHER` : ''}
         </button>
         <p className="small muted" style={{ margin: 0 }}>
-          A 7-day hold applies to newly-earned LUMEN. The rate floats with the live $AETHER price, and the
-          Rewards Pool caps total payouts — so the economy can't be drained.
+          No hold — LUMEN is withdrawable the instant you earn it (minimum {REDEEM_MIN_LUMEN} per cash-out).
+          The rate floats with the live $AETHER price, and the Rewards Pool caps total payouts, so the
+          economy can't be drained.
         </p>
       </div>
     </Modal>

@@ -24,7 +24,15 @@ export const LUMEN_PEG_USD = 0.01;        // reference value of 1 LUMEN, in USD
 export const POOL_FUNDING_RATE = 0.30;    // share of premium-pull revenue ring-fenced for payouts
 export const REDEEM_DAILY_CAP = 50;       // max LUMEN converted per account per UTC day
 export const REDEEM_WEEKLY_CAP = 250;     // ...per rolling/UTC week
-export const MIN_HOLD_DAYS = 7;           // a LUMEN lot must age this long before it can be redeemed
+export const REDEEM_MIN_LUMEN = 50;       // smallest single cash-out. Set == the daily cap so a
+                                          // redeem is one full-cap payout/day (no dust txs) and a
+                                          // player must BANK a real stack before any cash-out —
+                                          // this is the anti "spam-daily-rewards-then-withdraw" floor.
+                                          // Must stay <= REDEEM_DAILY_CAP or a redeem can never clear.
+export const MIN_HOLD_DAYS = 0;           // NO hold — LUMEN is redeemable the instant it's earned. A hold
+                                          // kills retention in a token game. Anti-farming is carried by the
+                                          // eligibility gate + caps + REDEEM_MIN_LUMEN + the pool invariant,
+                                          // NOT by making players wait. Raise only if live farming appears.
 export const TAU_FLOOR = 0.10;            // min conversion burn-tax
 export const TAU_MAX = 0.60;              // max conversion burn-tax (under pool stress)
 export const TAU_STRESS_FROM = 0.8;       // tau starts rising once rollingRatio passes this
@@ -85,7 +93,7 @@ export interface RedeemInput {
 
 export interface RedeemQuote {
   ok: boolean;
-  reason?: 'cap' | 'pool_low' | 'bad_input';
+  reason?: 'cap' | 'pool_low' | 'bad_input' | 'min';
   acceptedLumen: number;    // after daily/weekly caps
   burnedLumen: number;      // tau * accepted (a LUMEN sink)
   netLumen: number;         // accepted - burned (the value actually converted)
@@ -114,6 +122,9 @@ export function redeemQuote(input: RedeemInput): RedeemQuote {
   const weeklyRoom = Math.max(0, REDEEM_WEEKLY_CAP - input.weeklyUsedLumen);
   const accepted = Math.min(input.lumenRequested, dailyRoom, weeklyRoom);
   if (accepted <= 0) return { ok: false, reason: 'cap', ...empty };
+  // Minimum cash-out: you must convert at least REDEEM_MIN_LUMEN in one go. Blocks
+  // dust payouts and "earn a few, withdraw, repeat" — you have to bank a real stack.
+  if (accepted < REDEEM_MIN_LUMEN) return { ok: false, reason: 'min', ...empty };
 
   const t = tau(input.rollingRatio);
   const burned = accepted * t;

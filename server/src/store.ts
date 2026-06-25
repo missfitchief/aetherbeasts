@@ -357,7 +357,7 @@ export class Store {
   getLumen(id: string): number {
     const r = this.byId.get(id); if (!r) return 0; this.ensureLumen(r); return r.lumen;
   }
-  /** Grant LUMEN (server-only: quest/ranked/boss rewards). Records an earn lot for the min-hold. */
+  /** Grant LUMEN (server-only: quest/ranked/boss rewards). Records an earn lot (FIFO ledger). */
   grantLumen(id: string, amount: number, source: string): void {
     const r = this.byId.get(id); if (!r || !(amount > 0)) return; this.ensureLumen(r);
     r.lumen += amount;
@@ -396,7 +396,7 @@ export class Store {
     }
     rec.lumenLots = rec.lumenLots.filter((l) => l.amount > 1e-9);
   }
-  /** LUMEN that has cleared the min-hold and may be redeemed at the Exchange. */
+  /** LUMEN that may be redeemed at the Exchange (MIN_HOLD_DAYS=0 ⇒ all earned LUMEN). */
   redeemableLumen(id: string, now: number): number {
     const r = this.byId.get(id); if (!r) return 0; this.ensureLumen(r);
     const cutoff = now - MIN_HOLD_DAYS * 86_400_000;

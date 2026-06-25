@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   emissionFactor, tau, poolCreditFromRevenue, redeemQuote, isRedeemEligible,
-  TAU_FLOOR, TAU_MAX, REDEEM_DAILY_CAP, REDEEM_WEEKLY_CAP, POOL_FUNDING_RATE,
+  TAU_FLOOR, TAU_MAX, REDEEM_DAILY_CAP, REDEEM_WEEKLY_CAP, REDEEM_MIN_LUMEN, POOL_FUNDING_RATE,
 } from './lumen.js';
 
 describe('emission + tax governors', () => {
@@ -48,6 +48,11 @@ describe('redeemQuote', () => {
     expect(redeemQuote({ ...base, lumenRequested: 999 }).acceptedLumen).toBe(REDEEM_DAILY_CAP);
     expect(redeemQuote({ ...base, lumenRequested: 50, dailyUsedLumen: REDEEM_DAILY_CAP }).ok).toBe(false);
     expect(redeemQuote({ ...base, lumenRequested: 50, weeklyUsedLumen: REDEEM_WEEKLY_CAP }).reason).toBe('cap');
+  });
+
+  it('rejects a cash-out below the per-transaction minimum', () => {
+    expect(redeemQuote({ ...base, lumenRequested: REDEEM_MIN_LUMEN - 1 }).reason).toBe('min');
+    expect(redeemQuote({ ...base, lumenRequested: REDEEM_MIN_LUMEN }).ok).toBe(true);
   });
 
   it('refuses when the pool cannot cover the payout (circuit breaker)', () => {

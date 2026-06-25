@@ -43,20 +43,19 @@ const t0 = Date.now();
 
 store.grantLumen(L.id, 10, 'test');
 assert(store.getLumen(L.id) === 10, 'grantLumen credits the balance');
-assert(store.redeemableLumen(L.id, t0) === 0, 'freshly-earned LUMEN is under the min-hold (not redeemable)');
-assert(store.redeemableLumen(L.id, t0 + 8 * DAY) === 10, 'after the 7-day hold it becomes redeemable');
+const later = t0 + DAY; // any time after the grant
+assert(store.redeemableLumen(L.id, later) === 10, 'LUMEN is redeemable instantly — no hold');
 
 // in-game sinks consume LUMEN regardless of age
 assert(store.spendLumen(L.id, 4) === true, 'spendLumen succeeds when funded');
 assert(store.getLumen(L.id) === 6, 'spendLumen debits the balance');
 assert(store.spendLumen(L.id, 999) === false, 'spendLumen fails when underfunded');
 
-// redemption only touches AGED lots and records daily usage
-const aged = t0 + 8 * DAY;
-assert(store.commitRedeem(L.id, 6, aged) === true, 'commitRedeem consumes aged LUMEN');
+// redemption records daily usage and can't exceed the redeemable balance
+assert(store.commitRedeem(L.id, 6, later) === true, 'commitRedeem consumes redeemable LUMEN');
 assert(store.getLumen(L.id) === 0, 'redeemed LUMEN leaves the balance');
-assert(store.redeemUsage(L.id, aged).dailyUsed === 6, 'daily redeemed usage is recorded');
-assert(store.commitRedeem(L.id, 1, aged) === false, 'cannot redeem more than the redeemable balance');
+assert(store.redeemUsage(L.id, later).dailyUsed === 6, 'daily redeemed usage is recorded');
+assert(store.commitRedeem(L.id, 1, later) === false, 'cannot redeem more than the redeemable balance');
 
 // Rewards Pool solvency invariant: a debit can never exceed the pool
 store.addRewardsPool(1000n);
@@ -103,7 +102,7 @@ store.grantSeasonLumen(S.id, 3); // +1 tier -> +10
 assert(store.getLumen(S.id) === 30, 'season grants only the delta');
 
 const RF = store.createWallet('WALLET_REFUND');
-const rnow = Date.now() + 9 * 86_400_000; // age past the 7-day hold
+const rnow = Date.now() + 9 * 86_400_000; // any time after the grant
 store.grantLumen(RF.id, 30, 'test');
 assert(store.commitRedeem(RF.id, 20, rnow) === true, 'commitRedeem consumes + charges the cap');
 assert(store.redeemUsage(RF.id, rnow).dailyUsed === 20, 'cap usage charged');
