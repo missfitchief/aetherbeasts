@@ -45,15 +45,13 @@ export interface ExchangeQuote {
   ok: boolean;
   reason?: string;
   requested: number;       // LUMEN the player asked to convert
-  acceptedLumen: number;   // after daily/weekly caps + redeemable balance
+  acceptedLumen: number;   // the LUMEN being converted (no cap; bounded by redeemable balance)
   burnedLumen: number;     // conversion burn-tax
   netLumen: number;        // accepted - burned
   taxRate: number;         // tau
   aether: number;          // $AETHER (UI units) they'd receive
   aetherBaseUnits: string; // exact base units (bigint serialized as string)
-  redeemable: number;      // held LUMEN that has cleared the min-hold
-  dailyRemaining: number;
-  weeklyRemaining: number;
+  redeemable: number;      // LUMEN available to redeem (no hold ⇒ the player's full balance)
   eligible: boolean;       // passed the eligibility gate (prior purchase + wallet age)
 }
 

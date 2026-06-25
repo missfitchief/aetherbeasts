@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   emissionFactor, tau, poolCreditFromRevenue, redeemQuote, isRedeemEligible,
-  TAU_FLOOR, TAU_MAX, REDEEM_DAILY_CAP, REDEEM_WEEKLY_CAP, REDEEM_MIN_LUMEN, POOL_FUNDING_RATE,
+  TAU_FLOOR, TAU_MAX, REDEEM_MIN_LUMEN, POOL_FUNDING_RATE,
 } from './lumen.js';
 
 describe('emission + tax governors', () => {
@@ -31,7 +31,7 @@ describe('pool funding', () => {
 });
 
 describe('redeemQuote', () => {
-  const base = { aetherPriceUsd: 0.0001, aetherDecimals: 6, rollingRatio: 0, dailyUsedLumen: 0, weeklyUsedLumen: 0, poolBaseUnits: 10n ** 18n };
+  const base = { aetherPriceUsd: 0.0001, aetherDecimals: 6, rollingRatio: 0, poolBaseUnits: 10n ** 18n };
 
   it('converts net LUMEN at the USD peg, burning tau, rounding DOWN', () => {
     const q = redeemQuote({ ...base, lumenRequested: 50 });
@@ -44,10 +44,10 @@ describe('redeemQuote', () => {
     expect(q.aetherBaseUnits).toBe(4_500_000_000n);
   });
 
-  it('clamps to the daily and weekly caps', () => {
-    expect(redeemQuote({ ...base, lumenRequested: 999 }).acceptedLumen).toBe(REDEEM_DAILY_CAP);
-    expect(redeemQuote({ ...base, lumenRequested: 50, dailyUsedLumen: REDEEM_DAILY_CAP }).ok).toBe(false);
-    expect(redeemQuote({ ...base, lumenRequested: 50, weeklyUsedLumen: REDEEM_WEEKLY_CAP }).reason).toBe('cap');
+  it('has no daily/weekly maximum — converts the full requested amount', () => {
+    const q = redeemQuote({ ...base, lumenRequested: 5000 });
+    expect(q.ok).toBe(true);
+    expect(q.acceptedLumen).toBe(5000); // not clamped to any cap
   });
 
   it('rejects a cash-out below the per-transaction minimum', () => {
@@ -98,10 +98,10 @@ describe('THE INVARIANT: cumulative payout can never exceed 30% of revenue', () 
         revenue += treasury;
         pool += poolCreditFromRevenue(treasury);
       } else {
-        // a player cashes out the full daily cap
+        // a player cashes out a chunk
         const q = redeemQuote({
-          lumenRequested: REDEEM_DAILY_CAP, aetherPriceUsd: price, aetherDecimals: decimals,
-          rollingRatio: 0.5, dailyUsedLumen: 0, weeklyUsedLumen: 0, poolBaseUnits: pool,
+          lumenRequested: 50, aetherPriceUsd: price, aetherDecimals: decimals,
+          rollingRatio: 0.5, poolBaseUnits: pool,
         });
         if (q.ok) { pool -= q.aetherBaseUnits; paid += q.aetherBaseUnits; redemptions++; }
       }

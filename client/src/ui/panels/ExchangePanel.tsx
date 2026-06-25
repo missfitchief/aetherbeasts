@@ -48,7 +48,7 @@ export function ExchangePanel() {
                 <Row label="You receive" value={`${quote.aether} $AETHER`} strong />
               </>
             )}
-            <div className="small muted">Min {REDEEM_MIN_LUMEN} · redeemable {quote.redeemable} · daily left {quote.dailyRemaining} · weekly left {quote.weeklyRemaining}</div>
+            <div className="small muted">Min {REDEEM_MIN_LUMEN} · redeemable {quote.redeemable} · no daily/weekly cap</div>
           </div>
         )}
 
@@ -56,9 +56,9 @@ export function ExchangePanel() {
           Cash out{quote?.ok ? ` → ${quote.aether} $AETHER` : ''}
         </button>
         <p className="small muted" style={{ margin: 0 }}>
-          No hold — LUMEN is withdrawable the instant you earn it (minimum {REDEEM_MIN_LUMEN} per cash-out).
-          The rate floats with the live $AETHER price, and the Rewards Pool caps total payouts, so the
-          economy can't be drained.
+          No hold, no daily limit — withdraw as much LUMEN as you hold the instant you earn it
+          (minimum {REDEEM_MIN_LUMEN} per cash-out). The rate floats with the live $AETHER price, and the
+          Rewards Pool caps total payouts, so the economy can't be drained.
         </p>
       </div>
     </Modal>

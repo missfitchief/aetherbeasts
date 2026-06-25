@@ -22,17 +22,15 @@
 // ---- economic constants (tunable; mirror server config at launch) -----------
 export const LUMEN_PEG_USD = 0.01;        // reference value of 1 LUMEN, in USD
 export const POOL_FUNDING_RATE = 0.30;    // share of premium-pull revenue ring-fenced for payouts
-export const REDEEM_DAILY_CAP = 50;       // max LUMEN converted per account per UTC day
-export const REDEEM_WEEKLY_CAP = 250;     // ...per rolling/UTC week
-export const REDEEM_MIN_LUMEN = 50;       // smallest single cash-out. Set == the daily cap so a
-                                          // redeem is one full-cap payout/day (no dust txs) and a
-                                          // player must BANK a real stack before any cash-out —
-                                          // this is the anti "spam-daily-rewards-then-withdraw" floor.
-                                          // Must stay <= REDEEM_DAILY_CAP or a redeem can never clear.
+export const REDEEM_MIN_LUMEN = 50;       // smallest single cash-out. The ONLY redemption bound besides the
+                                          // pool itself — there is NO daily/weekly maximum (convert as much
+                                          // LUMEN as you hold). The minimum just blocks dust payouts and forces
+                                          // a real stack before a cash-out. Solvency + outflow are governed by
+                                          // the pool invariant + the burn-tax, not a per-account cap.
 export const MIN_HOLD_DAYS = 0;           // NO hold — LUMEN is redeemable the instant it's earned. A hold
                                           // kills retention in a token game. Anti-farming is carried by the
-                                          // eligibility gate + caps + REDEEM_MIN_LUMEN + the pool invariant,
-                                          // NOT by making players wait. Raise only if live farming appears.
+                                          // eligibility gate + REDEEM_MIN_LUMEN + the burn-tax + the pool
+                                          // invariant, NOT by making players wait. Raise only if farming appears.
 export const TAU_FLOOR = 0.10;            // min conversion burn-tax
 export const TAU_MAX = 0.60;              // max conversion burn-tax (under pool stress)
 export const TAU_STRESS_FROM = 0.8;       // tau starts rising once rollingRatio passes this
@@ -82,19 +80,17 @@ export function poolCreditFromRevenue(treasuryBaseUnits: bigint): bigint {
 }
 
 export interface RedeemInput {
-  lumenRequested: number;   // LUMEN the player wants to convert
+  lumenRequested: number;   // LUMEN to convert (caller bounds this to the player's redeemable balance)
   aetherPriceUsd: number;   // live $ per $AETHER (caller floors this via the price feed)
   aetherDecimals: number;   // token decimals (e.g. 6)
   rollingRatio: number;     // R, for tau
-  dailyUsedLumen: number;   // LUMEN already redeemed today
-  weeklyUsedLumen: number;  // LUMEN already redeemed this week
   poolBaseUnits: bigint;    // current Rewards Pool balance
 }
 
 export interface RedeemQuote {
   ok: boolean;
-  reason?: 'cap' | 'pool_low' | 'bad_input' | 'min';
-  acceptedLumen: number;    // after daily/weekly caps
+  reason?: 'pool_low' | 'bad_input' | 'min' | 'dust';
+  acceptedLumen: number;    // the LUMEN being converted (no cap; == requested)
   burnedLumen: number;      // tau * accepted (a LUMEN sink)
   netLumen: number;         // accepted - burned (the value actually converted)
   tau: number;
@@ -102,10 +98,12 @@ export interface RedeemQuote {
 }
 
 /**
- * Compute a redemption quote. Applies caps -> burn-tax -> USD-peg conversion at the
- * live price, rounds the payout DOWN (house never loses on rounding), and refuses
- * if the pool can't cover it (circuit breaker). Pure: the server re-checks caps,
- * eligibility, hold, and debits the pool atomically before paying.
+ * Compute a redemption quote: enforce the per-tx minimum -> burn-tax -> USD-peg
+ * conversion at the live price, round the payout DOWN (house never loses on rounding),
+ * and refuse if the pool can't cover it (circuit breaker). There is NO daily/weekly
+ * maximum — the caller bounds lumenRequested to the player's redeemable balance, and
+ * the pool invariant + burn-tax govern outflow. Pure: the server re-quotes, re-checks
+ * eligibility, and debits the pool atomically before paying.
  */
 export function redeemQuote(input: RedeemInput): RedeemQuote {
   const empty = { acceptedLumen: 0, burnedLumen: 0, netLumen: 0, tau: TAU_FLOOR, aetherBaseUnits: 0n };
@@ -118,12 +116,8 @@ export function redeemQuote(input: RedeemInput): RedeemQuote {
     return { ok: false, reason: 'bad_input', ...empty };
   }
 
-  const dailyRoom = Math.max(0, REDEEM_DAILY_CAP - input.dailyUsedLumen);
-  const weeklyRoom = Math.max(0, REDEEM_WEEKLY_CAP - input.weeklyUsedLumen);
-  const accepted = Math.min(input.lumenRequested, dailyRoom, weeklyRoom);
-  if (accepted <= 0) return { ok: false, reason: 'cap', ...empty };
-  // Minimum cash-out: you must convert at least REDEEM_MIN_LUMEN in one go. Blocks
-  // dust payouts and "earn a few, withdraw, repeat" — you have to bank a real stack.
+  // No daily/weekly cap: convert as much as you hold. Only the per-tx minimum applies.
+  const accepted = input.lumenRequested;
   if (accepted < REDEEM_MIN_LUMEN) return { ok: false, reason: 'min', ...empty };
 
   const t = tau(input.rollingRatio);
@@ -134,7 +128,7 @@ export function redeemQuote(input: RedeemInput): RedeemQuote {
   const aetherWhole = (net * LUMEN_PEG_USD) / input.aetherPriceUsd;
   const baseUnits = BigInt(Math.floor(aetherWhole * Math.pow(10, input.aetherDecimals)));
 
-  if (baseUnits <= 0n) return { ok: false, reason: 'cap', acceptedLumen: accepted, burnedLumen: burned, netLumen: net, tau: t, aetherBaseUnits: 0n };
+  if (baseUnits <= 0n) return { ok: false, reason: 'dust', acceptedLumen: accepted, burnedLumen: burned, netLumen: net, tau: t, aetherBaseUnits: 0n };
   if (baseUnits > input.poolBaseUnits) {
     return { ok: false, reason: 'pool_low', acceptedLumen: accepted, burnedLumen: burned, netLumen: net, tau: t, aetherBaseUnits: 0n };
   }

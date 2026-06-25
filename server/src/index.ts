@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { Server, type Socket } from 'socket.io';
 import type { SaveData, PlayerAction, SummonReport, QuestProgressType, PresenceEnterMsg, PresenceMoveMsg } from '@aether/shared';
-import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, claimLoginReward, addItem, toQuestView, poolCreditFromRevenue, LUMEN_FAUCET, utcDate, redeemQuote, isRedeemEligible, REDEEM_DAILY_CAP, REDEEM_WEEKLY_CAP, REDEEM_MIN_LUMEN } from '@aether/shared';
+import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, claimLoginReward, addItem, toQuestView, poolCreditFromRevenue, LUMEN_FAUCET, utcDate, redeemQuote, isRedeemEligible, REDEEM_MIN_LUMEN } from '@aether/shared';
 import { PORT, corsOrigin, TREASURY_ADDRESS, AETHER_MINT, AETHER_DECIMALS, QUOTE_TTL_MS, ONCHAIN_SUMMON_ENABLED, LUMEN_ENABLED, EXCHANGE_ENABLED, validateConfig } from './config.js';
 import { Store, publicProfile, type PlayerRecord } from './store.js';
 import { buildLoginMessage, verifySignature } from './auth.js';
@@ -295,12 +295,12 @@ function bind(socket: Socket) {
   const DECIMALS_POW = Math.pow(10, AETHER_DECIMALS);
   const disabledQuote = (reason: string) => ({
     ok: false, reason, requested: 0, acceptedLumen: 0, burnedLumen: 0, netLumen: 0,
-    taxRate: 0, aether: 0, aetherBaseUnits: '0', redeemable: 0, dailyRemaining: 0, weeklyRemaining: 0, eligible: false,
+    taxRate: 0, aether: 0, aetherBaseUnits: '0', redeemable: 0, eligible: false,
   });
   // Map a redeemQuote reason code to player-facing copy (used by both quote + redeem).
   const reasonText = (r?: string): string | undefined =>
     r === 'min' ? `Cash out at least ${REDEEM_MIN_LUMEN} LUMEN at a time.`
-      : r === 'cap' ? 'Daily/weekly cash-out cap reached.'
+      : r === 'dust' ? 'That converts to less than one $AETHER unit — try a bit more.'
       : r === 'pool_low' ? 'The Rewards Pool is replenishing — try again later.'
       : r === 'bad_input' ? 'Enter a valid amount.'
       : r || undefined;
@@ -314,20 +314,19 @@ function bind(socket: Socket) {
     const now = Date.now();
     const requested = Math.max(0, Math.floor(Number(p.lumen) || 0));
     const redeemable = store.redeemableLumen(id, now);
-    const { dailyUsed, weeklyUsed } = store.redeemUsage(id, now);
     const eligible = isRedeemEligible(store.getPremiumPurchases(id), await walletAgeDays(rec.wallet));
     const price = await aetherUsdPrice();
     const q = redeemQuote({
       lumenRequested: Math.min(requested, redeemable),
       aetherPriceUsd: price, aetherDecimals: AETHER_DECIMALS, rollingRatio: store.rollingRedeemRatio(now),
-      dailyUsedLumen: dailyUsed, weeklyUsedLumen: weeklyUsed, poolBaseUnits: store.getRewardsPool(),
+      poolBaseUnits: store.getRewardsPool(),
     });
     socket.emit('exchange:quoted', {
       ok: eligible && q.ok,
       reason: !eligible ? 'Buy at least one premium pull (and let your wallet age 30 days) to use the Exchange.' : reasonText(q.reason),
       requested, acceptedLumen: q.acceptedLumen, burnedLumen: q.burnedLumen, netLumen: q.netLumen, taxRate: q.tau,
       aether: Number(q.aetherBaseUnits) / DECIMALS_POW, aetherBaseUnits: q.aetherBaseUnits.toString(),
-      redeemable, dailyRemaining: Math.max(0, REDEEM_DAILY_CAP - dailyUsed), weeklyRemaining: Math.max(0, REDEEM_WEEKLY_CAP - weeklyUsed), eligible,
+      redeemable, eligible,
     });
   });
 
@@ -337,7 +336,7 @@ function bind(socket: Socket) {
     const fail = (reason: string) => socket.emit('exchange:result', { ok: false, reason, lumenSpent: 0, aether: 0 });
     if (!EXCHANGE_ENABLED) return fail('The Aether Exchange is not open yet.');
     // Serialize cash-outs per player: without this, two concurrent redeems both read
-    // redeemable/usage BEFORE either commits and slip past the caps (TOCTOU).
+    // redeemable BEFORE either commits and double-spends the same LUMEN (TOCTOU).
     if (redeemInFlight.has(id)) return fail('A cash-out is already in progress — give it a moment.');
     redeemInFlight.add(id);
     try {
@@ -348,16 +347,15 @@ function bind(socket: Socket) {
         return fail('Not eligible yet — buy a premium pull and let your wallet age 30 days first.');
       const requested = Math.max(0, Math.floor(Number(p.lumen) || 0));
       const redeemable = store.redeemableLumen(id, now);
-      const { dailyUsed, weeklyUsed } = store.redeemUsage(id, now);
       const price = await aetherUsdPrice();
       // Re-quote server-side; the client's numbers are NEVER trusted for a payout.
       const q = redeemQuote({
         lumenRequested: Math.min(requested, redeemable),
         aetherPriceUsd: price, aetherDecimals: AETHER_DECIMALS, rollingRatio: store.rollingRedeemRatio(now),
-        dailyUsedLumen: dailyUsed, weeklyUsedLumen: weeklyUsed, poolBaseUnits: store.getRewardsPool(),
+        poolBaseUnits: store.getRewardsPool(),
       });
       if (!q.ok) return fail(reasonText(q.reason) ?? 'Nothing redeemable yet.');
-      // Reserve (consume LUMEN + charge caps, then debit the pool) BEFORE paying.
+      // Reserve (consume LUMEN, then debit the pool) BEFORE paying.
       if (!store.commitRedeem(id, q.acceptedLumen, now)) return fail('Insufficient redeemable LUMEN.');
       if (!store.debitRewardsPool(q.aetherBaseUnits)) {
         store.refundRedeem(id, q.acceptedLumen, now); // pool moved under us — undo LUMEN + cap usage
