@@ -1,8 +1,8 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { Server, type Socket } from 'socket.io';
-import type { SaveData, PlayerAction, SummonReport, QuestProgressType, PresenceEnterMsg, PresenceMoveMsg } from '@aether/shared';
-import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, claimLoginReward, addItem, toQuestView, poolCreditFromRevenue, LUMEN_FAUCET, redeemQuote, isRedeemEligible, REDEEM_MIN_LUMEN } from '@aether/shared';
+import type { SaveData, PlayerAction, SummonReport, QuestProgressType, PresenceEnterMsg, PresenceMoveMsg, Creature } from '@aether/shared';
+import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, claimLoginReward, addItem, createCreature, toQuestView, poolCreditFromRevenue, LUMEN_FAUCET, redeemQuote, isRedeemEligible, REDEEM_MIN_LUMEN } from '@aether/shared';
 import { PORT, corsOrigin, TREASURY_ADDRESS, AETHER_MINT, AETHER_DECIMALS, QUOTE_TTL_MS, ONCHAIN_SUMMON_ENABLED, LUMEN_ENABLED, EXCHANGE_ENABLED, validateConfig } from './config.js';
 import { Store, publicProfile, type PlayerRecord } from './store.js';
 import { buildLoginMessage, verifySignature } from './auth.js';
@@ -281,11 +281,16 @@ function bind(socket: Socket) {
     if (!res) return; // already claimed today
     if (res.reward.aether) rec.save.aether = (rec.save.aether ?? 0) + res.reward.aether;
     if (res.reward.itemId) addItem(rec.save, res.reward.itemId, res.reward.qty ?? 1);
+    // Login rewards are mostly MONSTERS (day 7 = a rare). The server creates the creature so
+    // both sides hold the SAME one. The cashable token is earned by PLAYING, never by logging in.
+    let granted: Creature | undefined;
+    if (res.reward.speciesId) {
+      granted = createCreature(res.reward.speciesId, res.reward.level ?? 5);
+      rec.save.box.push(granted);
+    }
     rec.save.updatedAt = Math.max((rec.save.updatedAt ?? 0) + 1, now);
     store.saveProgress(id, rec.save);
-    // Login grants GLINT only (soft currency) — the cashable token is earned by PLAYING,
-    // not by logging in (ranked wins, boss/Champion clears, milestones).
-    socket.emit('login:claimed', { day: res.day, reward: res.reward, view: toQuestView(qs, now) });
+    socket.emit('login:claimed', { day: res.day, reward: res.reward, creature: granted, view: toQuestView(qs, now) });
   });
 
   // --- The Aether Exchange: LUMEN -> $AETHER cash-out (gated, server-authoritative) ---

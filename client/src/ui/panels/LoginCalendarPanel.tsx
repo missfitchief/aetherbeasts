@@ -3,6 +3,7 @@ import { useNet } from '../../net/net.js';
 import { loginClaim } from '../../net/net.js';
 import { useGame } from '../../state/store.js';
 import { Modal } from '../Panels.js';
+import { monSpriteUrl } from '../../game/assets.js';
 
 /** 7-day login reward calendar. Reads the server-owned cycle from the quest view. */
 export function LoginCalendarPanel() {
@@ -21,7 +22,7 @@ export function LoginCalendarPanel() {
 
   const onClaim = () => {
     if (!login?.claimableToday || claimedLabel !== null) return;
-    setClaimedLabel(login.rewards[login.cycleDay] ?? 'your reward');
+    setClaimedLabel(login.rewards[login.cycleDay]?.label ?? 'your reward');
     loginClaim();
   };
 
@@ -32,10 +33,10 @@ export function LoginCalendarPanel() {
       ) : (
         <div>
           <div className="small muted" style={{ marginBottom: 8 }}>
-            Log in each day for a reward — keep the streak going for the Day 7 prize!
+            Log in each day for a monster — keep the streak going for the Day 7 ★ rare!
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 5, margin: '6px 0 12px' }}>
-            {login.rewards.map((label, i) => {
+            {login.rewards.map((r, i) => {
               const day = i + 1;
               // While the confirmation shows, light up the day we just claimed too.
               const claimed = day <= login.cycleDay || (claimedLabel !== null && day === login.cycleDay + 1);
@@ -53,7 +54,12 @@ export function LoginCalendarPanel() {
                   }}
                 >
                   <div style={{ fontSize: 11, color: day7 ? '#ffcf5c' : '#ffd166', fontWeight: 700 }}>Day {day}</div>
-                  <div style={{ fontSize: 9, color: '#cbd5e1', minHeight: 22, lineHeight: 1.2 }}>{label}</div>
+                  {r.speciesId ? (
+                    <img src={monSpriteUrl(r.speciesId)} alt={r.label} style={{ width: 32, height: 32, imageRendering: 'pixelated', objectFit: 'contain', display: 'block', margin: '2px auto' }} />
+                  ) : (
+                    <div style={{ height: 32 }} />
+                  )}
+                  <div style={{ fontSize: 9, color: day7 ? '#ffcf5c' : '#cbd5e1', minHeight: 14, lineHeight: 1.2, fontWeight: day7 ? 700 : 400 }}>{r.label}</div>
                   <div style={{ color: '#53d769', height: 12 }}>{claimed ? '✓' : ''}</div>
                 </div>
               );

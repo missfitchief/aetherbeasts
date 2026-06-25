@@ -70,16 +70,16 @@ export const ONBOARDING: QuestDef[] = [
   { id: 'ob_win_ten',      kind: 'onboarding', goal: 'Win 10 battles',            type: 'battle_win', target: 10, aether: 350, points: 20 },
 ];
 
-/** 7-day login reward cycle (index 0 = day 1). Day 7 is a free pull's worth of ◈. */
-export interface LoginReward { aether?: number; itemId?: string; qty?: number; label: string; }
+/** 7-day login reward cycle (index 0 = day 1). Mostly MONSTERS; Day 7 is a rare one. */
+export interface LoginReward { aether?: number; itemId?: string; qty?: number; speciesId?: string; level?: number; label: string; }
 export const LOGIN_REWARDS: LoginReward[] = [
-  { aether: 100, label: '100 ◈' },
+  { speciesId: 'grodent', level: 5, label: 'Grodent' },
   { aether: 150, label: '150 ◈' },
+  { speciesId: 'duvan', level: 6, label: 'Duvan' },
   { itemId: 'pactstone', qty: 3, label: '3 Pact Stones' },
-  { aether: 250, label: '250 ◈' },
-  { itemId: 'potion', qty: 2, label: '2 Potions' },
+  { speciesId: 'jestar', level: 8, label: 'Jestar' },
   { aether: 400, label: '400 ◈' },
-  { aether: 1600, label: '1600 ◈ — free pull!' },
+  { speciesId: 'magmaclaw', level: 12, label: '★ Magmaclaw' },
 ];
 
 const DAILY_COUNT = 3;
@@ -240,7 +240,7 @@ export function toQuestView(state: QuestState, now: number): QuestView {
     login: {
       cycleDay: state.loginCalendar?.day ?? 0,
       claimableToday: (state.loginCalendar?.lastClaim ?? '') !== utcDate(now),
-      rewards: LOGIN_REWARDS.map((r) => r.label),
+      rewards: LOGIN_REWARDS.map((r) => ({ label: r.label, speciesId: r.speciesId })),
     },
     streak: state.streak.count,
     seasonPoints: state.seasonPoints,

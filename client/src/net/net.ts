@@ -17,6 +17,7 @@ import type {
   ExchangeQuote,
   ExchangeResult,
   PresencePlayer,
+  Creature,
 } from '@aether/shared';
 import { DEFAULT_STAKE, addItem } from '@aether/shared';
 import { useGame } from '../state/store.js';
@@ -399,10 +400,15 @@ function wire(s: Socket) {
     toast(`Quest complete! +${p.aether} ◈${bonus}`);
   });
 
-  s.on('login:claimed', (p: { day: number; reward: { aether?: number; itemId?: string; qty?: number; label: string }; view: QuestView }) => {
+  s.on('login:claimed', (p: { day: number; reward: { aether?: number; itemId?: string; qty?: number; speciesId?: string; label: string }; creature?: Creature; view: QuestView }) => {
     // Server already granted + persisted; reflect the delta locally without clobbering position.
     if (p.reward.aether) useGame.getState().addAether(p.reward.aether);
     if (p.reward.itemId) useGame.getState().mutate((sv) => addItem(sv, p.reward.itemId!, p.reward.qty ?? 1));
+    if (p.creature) useGame.getState().mutate((sv) => {
+      const c = p.creature!;
+      if (!sv.box.some((b) => b?.uid === c.uid) && !sv.party.some((b) => b?.uid === c.uid)) sv.box.push(c);
+      const d = (sv.dex[c.speciesId] ??= { seen: false, caught: false }); d.seen = true; d.caught = true;
+    });
     useNet.setState({ questView: p.view });
     toast(`Day ${p.day} login reward: ${p.reward.label}`);
   });
