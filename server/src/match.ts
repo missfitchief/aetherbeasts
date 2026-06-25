@@ -30,7 +30,7 @@ import {
   type WagerCurrency,
 } from '@aether/shared';
 import { Store, publicProfile } from './store.js';
-import { LUMEN_ENABLED, STAKED_PVP_ENABLED } from './config.js';
+import { LUMEN_ENABLED, STAKED_PVP_ENABLED, WAGER_HOLD_MS } from './config.js';
 
 interface MatchSide {
   id: string; // playerId
@@ -311,8 +311,9 @@ export class MatchManager {
       bRD = elo(bRating, aRating, 1); aRD = elo(aRating, bRating, 0);
     }
 
-    this.credit(match.currency, match.a.id, aGain);
-    this.credit(match.currency, match.b.id, bGain);
+    // A wager WIN is held (anti-laundering); a draw refund is returned immediately.
+    this.credit(match.currency, match.a.id, aGain, aOut === 'win' ? WAGER_HOLD_MS : 0);
+    this.credit(match.currency, match.b.id, bGain, bOut === 'win' ? WAGER_HOLD_MS : 0);
     this.store.recordResult(match.a.id, aOut, aRD);
     this.store.recordResult(match.b.id, bOut, bRD);
     const lumenOk = !match.forfeited; // forfeit/run wins don't pay the ranked LUMEN drip
@@ -431,10 +432,11 @@ export class MatchManager {
   private debit(currency: WagerCurrency, id: string, amount: number): boolean {
     return currency === 'lumen' ? this.store.spendLumen(id, amount) : this.store.escrow(id, amount);
   }
-  /** Credit a payout/refund in the match's currency (LUMEN winnings are instantly redeemable). */
-  private credit(currency: WagerCurrency, id: string, amount: number): void {
+  /** Credit a payout/refund in the match's currency. `holdMs` delays redeemability of LUMEN
+   *  winnings (anti-laundering); refunds pass 0 (you get your own stake back immediately). */
+  private credit(currency: WagerCurrency, id: string, amount: number, holdMs = 0): void {
     if (amount <= 0) return;
-    if (currency === 'lumen') this.store.grantLumen(id, amount, 'wager');
+    if (currency === 'lumen') this.store.grantLumen(id, amount, 'wager', holdMs);
     else this.store.award(id, amount);
   }
 

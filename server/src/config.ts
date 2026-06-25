@@ -55,6 +55,12 @@ export const EXCHANGE_ENABLED = process.env.EXCHANGE_ENABLED === 'true' && LUMEN
  *  LUMEN emission on. Self-funding (winner takes the loser's stake minus a burned rake);
  *  does NOT touch the Rewards Pool. Enable deliberately after a red-team audit + counsel. */
 export const STAKED_PVP_ENABLED = process.env.STAKED_PVP_ENABLED === 'true' && LUMEN_ENABLED;
+/** Anti-laundering hold (DAYS) on LUMEN WON in a wager: winnings aren't REDEEMABLE until it
+ *  elapses (still spendable / re-wagerable). Default 0 (no hold). SET > 0 before enabling staked
+ *  PvP — otherwise a sybil ring can instantly funnel many feeder accounts' LUMEN into one gated
+ *  cash-out wallet (the per-account eligibility gate only binds at cash-out). */
+export const WAGER_HOLD_DAYS = Number(process.env.WAGER_HOLD_DAYS || 0);
+export const WAGER_HOLD_MS = (Number.isFinite(WAGER_HOLD_DAYS) && WAGER_HOLD_DAYS > 0 ? WAGER_HOLD_DAYS : 0) * 86_400_000;
 export const summonUsd = (count: number): number => (count >= 10 ? SUMMON_USD_10 : SUMMON_USD_1);
 
 // --- LUMEN -> $AETHER Exchange payout (treasury signer + ceilings) ----------

@@ -374,10 +374,12 @@ export class Store {
     const r = this.byId.get(id); if (!r) return 0; this.ensureLumen(r); return r.lumen;
   }
   /** Grant LUMEN (server-only: quest/ranked/boss rewards). Records an earn lot (FIFO ledger). */
-  grantLumen(id: string, amount: number, source: string): void {
+  grantLumen(id: string, amount: number, source: string, holdMs = 0): void {
     const r = this.byId.get(id); if (!r || !(amount > 0)) return; this.ensureLumen(r);
     r.lumen += amount;
-    r.lumenLots.push({ amount, earnedAt: Date.now(), source });
+    // holdMs post-dates the lot so it isn't REDEEMABLE until then (anti-laundering on wager
+    // winnings); it stays spendable / re-wagerable. 0 = cashable now, like every other faucet.
+    r.lumenLots.push({ amount, earnedAt: Date.now() + holdMs, source });
     if (r.lumenLots.length > 100) this.consolidateAgedLots(r); // bound growth; aged lots are interchangeable
     this.queuePersist(r);
   }
