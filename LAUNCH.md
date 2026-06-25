@@ -22,6 +22,11 @@ Two panic buttons exist at all times:
 - [ ] **Generate the treasury keypair.** This wallet receives pull payments AND pays out cash-outs,
       and holds your seed bag. Back it up securely (it is real money). The server reads it ONLY from
       a secret env var — it is never pasted into chat or logged.
+- [ ] **Set payout ceilings.** `PAYOUT_MAX_PER_TX_AETHER` + `PAYOUT_MAX_PER_DAY_AETHER` to non-zero
+      (default `0` = unlimited). This is the only treasury backstop independent of the in-memory pool
+      accounting — the audit flagged the unlimited default as the wrong setting for a real-money signer.
+- [ ] **`TOKEN_MODE=mainnet` at launch (NOT sim).** Sim mode returns fake payout signatures *and* bypasses
+      the 30-day wallet-age sybil gate. Treat the boot "sim mode" warning as a launch **blocker**.
 - [ ] **Decide economy params or accept the defaults** (see §D). Defaults are conservative.
 - [ ] **Legal / geofence decision.** A no-KYC cash-out is high regulatory exposure. At minimum decide
       whether to geofence (block US persons). This is the real gating call.
@@ -47,7 +52,10 @@ Two panic buttons exist at all times:
    - `REWARDS_POOL_SEED_AETHER` = how much $AETHER you sent to the treasury for payouts
    - `LUMEN_ENABLED` = `true`
    - `EXCHANGE_ENABLED` = `true`
-   - (optional) `PAYOUT_MAX_PER_TX_AETHER`, `PAYOUT_MAX_PER_DAY_AETHER` = payout ceilings
+   - `PAYOUT_MAX_PER_TX_AETHER`, `PAYOUT_MAX_PER_DAY_AETHER` = payout ceilings — **set non-zero**
+     (default `0` = unlimited; the only backstop independent of the pool accounting). Suggested: per-tx ≈
+     the $AETHER value of one full 50-LUMEN redeem at launch price; per-day ≈ a multiple of expected
+     daily redeemers.
 
 4. Render redeploys. **Verify the boot logs:**
    - `[config] on-chain summons ENABLED (mint=… treasury=… mode=mainnet)`
@@ -81,16 +89,33 @@ fake-value tokens, not real money:
 | LUMEN peg | $0.01 / LUMEN | reference cash-out value |
 | Pool funding | 30% of pull revenue | the ring-fence that bounds cash-out |
 | Daily / weekly cap | 50 / 250 LUMEN | per-account cash-out limit |
-| Min-hold | 7 days | newly-earned LUMEN can't be cashed instantly |
-| Eligibility | ≥1 premium pull + 30-day wallet | cash-out is a rebate on real spend |
-| Burn-tax | 10% floor (governor TODO) | throttles outflow under pool stress |
+| Min cash-out | 50 LUMEN / tx | smallest single redeem (== daily cap → no dust, forces real accumulation) |
+| Hold | none (instant) | LUMEN is redeemable the moment it's earned — a hold kills retention in a token game |
+| Eligibility | ≥1 premium pull + 30-day wallet age | rebate on real spend; gates fresh sybil wallets, not real users |
+| Burn-tax | 10%→60% dynamic | throttles outflow under pool stress |
 
 **Invariant:** cumulative cash-out can never exceed 30% of pull revenue + your seed; the pool can
 never go negative. The economy cannot be drained below what was put in.
 
 ---
 
-## E. Rollback
+## E. Security audit (2026-06-25)
+
+A multi-agent red-team (sybil faucet-farm · PvP self-deal · pool bank-run · accounting/timing races, each
+finding independently verified) audited the **instant-withdrawal** economy. Verdict: **safe-with-fixes**.
+
+- **Farming is net-negative:** a sybil must spend ≥1 pull (~$1.50, only 30% of which returns to the *global*
+  pool, none to the attacker) and age a wallet 30 days, then can extract at most the faucet ceiling
+  (~10–12 LUMEN/day) — far below the caps. Break-even on the single pull takes ~17 days of flawless daily
+  play; a pure-farm population recovers ≤30% of the revenue it itself provides.
+- **Removing the 7-day hold changed nothing structural** — the hold only delayed *when* value exits, never
+  the weekly ceiling on *how much*. Keep all current params; do **not** re-add a hold.
+- **Required before mainnet** (all env/config, folded into §A/§B): non-zero payout ceilings · `TOKEN_MODE=mainnet`
+  · durable `DATABASE_URL` (pool solvency + used-sig ledger need Postgres) · `TREASURY_SECRET_KEY` as a secret.
+- **Nice-to-have (deferred):** persist the burn-tax (tau) 7-day window so it can't reset to floor on a
+  restart (low economic impact, all inside the pool envelope).
+
+## F. Rollback
 
 - Pause cash-out without downtime: `EXCHANGE_ENABLED=false`, redeploy.
 - Stop all LUMEN emission: `LUMEN_ENABLED=false`.
