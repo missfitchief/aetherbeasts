@@ -8,6 +8,16 @@ import { gainExp, pendingEvolution } from '../engine/progression.js';
 const rng = seededRng(7);
 
 describe('scaledWildLevel', () => {
+  it('early game (Lv1-2 party) meets wilds at or below their own level', () => {
+    const z = ENCOUNTER_ZONES.whisperwood;
+    for (let i = 0; i < 80; i++) {
+      expect(scaledWildLevel(z, 1, rng)).toBe(1); // Lv1 starter -> Lv1 wilds (winnable + catchable)
+      const l2 = scaledWildLevel(z, 2, rng);
+      expect(l2).toBeGreaterThanOrEqual(1);
+      expect(l2).toBeLessThanOrEqual(2); // Lv2 -> at most Lv2 (no zone-floor bump)
+    }
+  });
+
   it('stays near the zone range when the player is low level', () => {
     const z = ENCOUNTER_ZONES.whisperwood;
     for (let i = 0; i < 80; i++) {

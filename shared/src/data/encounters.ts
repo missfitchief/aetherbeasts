@@ -75,9 +75,11 @@ export function scaledWildLevel(zone: EncounterZone, partyTopLevel: number, rng:
   const roll = randInt(rng, lo, hi);
   const scale = zone.id.includes('deep') ? 0.85 : 0.65;
   const drift = Math.floor(Math.max(0, partyTopLevel - hi) * scale);
-  // Headroom grows with the player so the early game is never unfair: a Lv1-2 trainer
-  // never meets a higher-level wild; it opens to +2 only once you're established.
-  const headroom = partyTopLevel <= 2 ? 0 : partyTopLevel <= 4 ? 1 : 2;
+  // EARLY GAME: a Lv1-2 trainer meets wilds AT OR BELOW their own level — ignore the zone's
+  // level floor so the first few fights are winnable + catchable with a fresh Lv1 starter.
+  if (partyTopLevel <= 2) return Math.min(partyTopLevel, roll);
+  // Past that, headroom grows with the player (never unfair): +1, then +2 once established.
+  const headroom = partyTopLevel <= 4 ? 1 : 2;
   const cap = Math.min(LEVEL_CAP, partyTopLevel + headroom);
   return Math.max(lo, Math.min(cap, roll + drift));
 }
