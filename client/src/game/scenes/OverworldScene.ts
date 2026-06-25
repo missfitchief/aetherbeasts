@@ -28,6 +28,12 @@ const CHAR_FILES: [string, string][] = [
   ['sheet_knight', 'char/char_knight_sheet.png'],
   ['sheet_mage', 'char/char_mage_sheet.png'],
   ['sheet_ninja', 'char/char_ninja_sheet.png'],
+  ['sheet_samurai', 'char/char_samurai_sheet.png'],
+  ['sheet_pirate', 'char/char_pirate_sheet.png'],
+  ['sheet_witch', 'char/char_witch_sheet.png'],
+  ['sheet_viking', 'char/char_viking_sheet.png'],
+  ['sheet_robot', 'char/char_robot_sheet.png'],
+  ['sheet_cowboy', 'char/char_cowboy_sheet.png'],
 ];
 const idleFrame = (d: Direction) => DIR_ROW[d] * 4;
 const EMOTE_EMOJI: Record<string, string> = { wave: '👋', happy: '😄', surprised: '😯', fire: '🔥', heart: '❤️', cry: '😢', gg: '🏆', sleep: '😴' };

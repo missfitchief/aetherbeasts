@@ -14,6 +14,12 @@ export const CHAR_BASES: { key: string; name: string }[] = [
   { key: 'sheet_knight', name: 'Knight' },
   { key: 'sheet_mage', name: 'Mage' },
   { key: 'sheet_ninja', name: 'Ninja' },
+  { key: 'sheet_samurai', name: 'Samurai' },
+  { key: 'sheet_pirate', name: 'Pirate' },
+  { key: 'sheet_witch', name: 'Witch' },
+  { key: 'sheet_viking', name: 'Viking' },
+  { key: 'sheet_robot', name: 'Robot' },
+  { key: 'sheet_cowboy', name: 'Cowboy' },
 ];
 
 /** Outfit colours offered in the creator (hue rotations; 0 keeps the original). */
