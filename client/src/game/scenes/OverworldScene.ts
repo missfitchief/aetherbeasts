@@ -14,6 +14,8 @@ import { monSpriteUrl, assetUrl } from '../assets.js';
 import { generateTileArt } from '../world/tileart.js';
 import { bakeTerrain } from '../world/autotile.js';
 import { generateObjectArt } from '../world/objectart.js';
+import { recolorOutfit } from '../world/charrecolor.js';
+import type { CharacterChoice } from '@aether/shared';
 // Real 4x4 walk sheets: rows = direction (right/up/left/down), cols = walk frame.
 const DIR_ROW: Record<Direction, number> = { right: 0, up: 1, left: 2, down: 3 };
 const CHAR_FILES: [string, string][] = [
@@ -77,6 +79,8 @@ export class OverworldScene extends Phaser.Scene {
   private npcSprites = new Map<string, Phaser.GameObjects.Sprite>();
   private remotePlayers = new Map<string, { c: Phaser.GameObjects.Container; spr: Phaser.GameObjects.Sprite; bubble?: Phaser.GameObjects.Text; tween?: Phaser.Tweens.Tween }>();
   private myId = '';
+  /** Texture key for the local player's avatar (a base sheet, or 'sheet_me' if recolored). */
+  private playerSheet = 'sheet_player';
   /** Everything drawn for the current map, so it can be cleared on a warp. */
   private mapGfx: Phaser.GameObjects.GameObject[] = [];
   private inForest = false;
@@ -114,6 +118,36 @@ export class OverworldScene extends Phaser.Scene {
     }
   }
 
+  /** The player's chosen avatar sheet key — recoloring the base outfit if needed. */
+  private resolvePlayerSheet(ap: CharacterChoice | null | undefined): string {
+    if (!ap || !ap.base || !this.textures.exists(ap.base)) return 'sheet_player';
+    if (!ap.hue) return ap.base;            // original colours — use the base sheet as-is
+    this.registerRecolored('sheet_me', ap.base, ap.hue);
+    return 'sheet_me';
+  }
+
+  /** Build a recolored copy of a base walk-sheet (outfit hue-rotated) + its anims. */
+  private registerRecolored(outKey: string, baseKey: string, hue: number): void {
+    if (this.textures.exists(outKey)) this.textures.remove(outKey);
+    const src = this.textures.get(baseKey).getSourceImage() as HTMLImageElement;
+    const w = src.width, h = src.height;
+    const tex = this.textures.createCanvas(outKey, w, h);
+    if (!tex) return;
+    const ctx = tex.getContext();
+    ctx.drawImage(src, 0, 0);
+    const img = ctx.getImageData(0, 0, w, h);
+    recolorOutfit(img.data, hue);
+    ctx.putImageData(img, 0, 0);
+    let idx = 0;
+    for (let row = 0; row < 4; row++) for (let col = 0; col < 4; col++) tex.add(idx++, 0, col * 16, row * 16, 16, 16);
+    tex.refresh();
+    (['right', 'up', 'left', 'down'] as Direction[]).forEach((dir) => {
+      const akey = `${outKey}_${dir}`;
+      if (this.anims.exists(akey)) this.anims.remove(akey);
+      this.anims.create({ key: akey, frames: this.anims.generateFrameNumbers(outKey, { start: DIR_ROW[dir] * 4, end: DIR_ROW[dir] * 4 + 3 }), frameRate: 8, repeat: -1 });
+    });
+  }
+
   create(): void {
     if (!this.textures.exists('grass0')) generateTileArt(this);
     if (!this.textures.exists('tree0')) generateObjectArt(this);
@@ -127,6 +161,7 @@ export class OverworldScene extends Phaser.Scene {
     }
     this.buildAnims();
     const save = useGame.getState().save!;
+    this.playerSheet = this.resolvePlayerSheet(save.appearance);
     this.mapGfx = [];
     this.world = getMap(save.position?.map ?? 'world');
     this.busy = false;
@@ -138,7 +173,7 @@ export class OverworldScene extends Phaser.Scene {
     this.ty = save.position?.y ?? this.world.spawn.y;
     this.facing = save.position?.facing ?? 'down';
 
-    this.player = this.add.sprite(0, 0, 'sheet_player', idleFrame(this.facing)).setOrigin(0.5, 0.85);
+    this.player = this.add.sprite(0, 0, this.playerSheet, idleFrame(this.facing)).setOrigin(0.5, 0.85);
     this.placePlayer();
 
     // Live presence: render other players on this map + announce ourselves.
@@ -447,7 +482,7 @@ export class OverworldScene extends Phaser.Scene {
     }
     this.moving = true;
     // play() with ignoreIfPlaying keeps the walk cycle smooth across tiles
-    this.player.anims.play(`sheet_player_${dir}`, true);
+    this.player.anims.play(`${this.playerSheet}_${dir}`, true);
     this.tweens.add({
       targets: this.player,
       x: nx * TILE + TILE / 2,
