@@ -19,11 +19,24 @@ export function ChatBox() {
   const messages = useChat((s) => s.messages);
   const [text, setText] = useState('');
   const logRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
+
+  useEffect(() => {
+    // Clicking/tapping anywhere OUTSIDE the chat box releases the input so the game gets
+    // keyboard control back (you can walk again). Capture phase so it fires even though the
+    // Phaser canvas stops pointer propagation and would otherwise keep the input focused.
+    const onDown = (e: Event) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) inputRef.current?.blur();
+    };
+    window.addEventListener('pointerdown', onDown, true);
+    return () => window.removeEventListener('pointerdown', onDown, true);
+  }, []);
 
   if (screen !== 'playing' || panel) return null;
 
@@ -31,10 +44,11 @@ export function ChatBox() {
     const t = text.trim();
     if (t) sendPresenceChat(t.slice(0, 160));
     setText('');
+    inputRef.current?.blur(); // hand keyboard control back to the game after sending
   };
 
   return (
-    <div style={wrap}>
+    <div ref={wrapRef} style={wrap}>
       <div ref={logRef} style={log}>
         {messages.length === 0 && <div className="muted" style={{ fontSize: 11 }}>Say hi to other Tamers nearby…</div>}
         {messages.map((m) => (
@@ -42,10 +56,11 @@ export function ChatBox() {
         ))}
       </div>
       <input
+        ref={inputRef}
         style={input}
         value={text}
         maxLength={160}
-        placeholder="Click and type to chat…"
+        placeholder="Click to chat · click map to walk"
         onChange={(e) => setText(e.target.value.slice(0, 160))}
         // Keep WASD/arrows/hotkeys from driving the game while the chat input is focused.
         onKeyDown={(e) => {
