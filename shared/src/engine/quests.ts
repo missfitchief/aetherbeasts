@@ -73,13 +73,13 @@ export const ONBOARDING: QuestDef[] = [
 /** 7-day login reward cycle (index 0 = day 1). Mostly MONSTERS; Day 7 is a rare one. */
 export interface LoginReward { aether?: number; itemId?: string; qty?: number; speciesId?: string; level?: number; label: string; }
 export const LOGIN_REWARDS: LoginReward[] = [
-  { speciesId: 'grodent', level: 5, label: 'Grodent' },
+  { speciesId: 'grodent', level: 3, label: 'Grodent' },
   { aether: 150, label: '150 ◈' },
-  { speciesId: 'duvan', level: 6, label: 'Duvan' },
+  { speciesId: 'duvan', level: 4, label: 'Duvan' },
   { itemId: 'pactstone', qty: 3, label: '3 Pact Stones' },
-  { speciesId: 'jestar', level: 8, label: 'Jestar' },
+  { speciesId: 'jestar', level: 6, label: 'Jestar' },
   { aether: 400, label: '400 ◈' },
-  { speciesId: 'magmaclaw', level: 12, label: '★ Magmaclaw' },
+  { speciesId: 'magmaclaw', level: 10, label: '★ Magmaclaw' },
 ];
 
 const DAILY_COUNT = 3;

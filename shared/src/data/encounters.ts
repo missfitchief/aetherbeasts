@@ -75,12 +75,13 @@ export function scaledWildLevel(zone: EncounterZone, partyTopLevel: number, rng:
   const roll = randInt(rng, lo, hi);
   const scale = zone.id.includes('deep') ? 0.85 : 0.65;
   const drift = Math.floor(Math.max(0, partyTopLevel - hi) * scale);
-  // EARLY GAME: a Lv1-2 trainer meets wilds AT OR BELOW their own level — ignore the zone's
-  // level floor so the first few fights are winnable + catchable with a fresh Lv1 starter.
-  if (partyTopLevel <= 2) return Math.min(partyTopLevel, roll);
-  // Past that, headroom grows with the player (never unfair): +1, then +2 once established.
-  const headroom = partyTopLevel <= 4 ? 1 : 2;
-  const cap = Math.min(LEVEL_CAP, partyTopLevel + headroom);
+  // EARLY GAME (Lv1-6): wilds never exceed your strongest beast OR the zone's natural range — no
+  // upward drift, and ignore the zone floor — so the opening stays winnable for a fresh Lv1 starter
+  // (and a weak beast you're raising isn't thrown above-level wilds just because the party has a
+  // stronger one). This is the band where the difficulty complaint lived.
+  if (partyTopLevel <= 6) return Math.max(1, Math.min(partyTopLevel, roll));
+  // Established players: wilds keep pace and drift up to +2 over your best (catch evolved forms).
+  const cap = Math.min(LEVEL_CAP, partyTopLevel + 2);
   return Math.max(lo, Math.min(cap, roll + drift));
 }
 
