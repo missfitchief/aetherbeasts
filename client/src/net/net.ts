@@ -249,6 +249,10 @@ function wire(s: Socket) {
     localStorage.setItem(TOKEN_KEY, p.token);
     useNet.setState({ status: 'online', socketReady: true, authFailed: false, profile: p.profile, wallet: p.profile.wallet, onchainSummon: p.onchainSummon, exchangeEnabled: p.exchangeEnabled, stakedPvpEnabled: p.stakedPvpEnabled });
 
+    // Re-register live-overworld presence on every (re)connect: the initial enter can be dropped
+    // if the scene mounts before the socket is up, and a reconnect needs us to re-join the map room.
+    if (lastPresenceEnter) s.emit('presence:enter', lastPresenceEnter);
+
     // Only reconcile the save on the first auth or an explicit wallet sign-in.
     const explicit = !firstAuthDone || walletLoginPending;
     firstAuthDone = true;
@@ -571,8 +575,10 @@ let presenceHandler: ((ev: PresenceEvent) => void) | null = null;
 /** The OverworldScene registers this on create and clears it on shutdown. */
 export function setPresenceHandler(fn: ((ev: PresenceEvent) => void) | null) { presenceHandler = fn; }
 
+let lastPresenceEnter: { map: string; x: number; y: number; facing: string; sprite: string } | null = null;
 export function sendPresenceEnter(map: string, x: number, y: number, facing: string, sprite: string) {
-  if (socket?.connected) socket.emit('presence:enter', { map, x, y, facing, sprite });
+  lastPresenceEnter = { map, x, y, facing, sprite }; // remembered so we can re-join on (re)connect
+  if (socket?.connected) socket.emit('presence:enter', lastPresenceEnter);
 }
 export function sendPresenceMove(x: number, y: number, facing: string) {
   if (socket?.connected) socket.emit('presence:move', { x, y, facing });
