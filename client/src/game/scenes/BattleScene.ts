@@ -444,7 +444,11 @@ export class BattleScene extends Phaser.Scene {
           this.refreshExp();
           break;
         case 'evolve-ready':
-          this.evolveQueue.push({ uid: ev.uid, into: ev.into });
+          // One evolution per creature per battle. The engine re-emits 'evolve-ready' on EVERY
+          // kill once the fighter is past its evolution level (pendingEvolution fallback), so in a
+          // multi-enemy trainer/boss fight the same beast would otherwise play the evolve
+          // animation back-to-back. Dedup by uid — keep the first.
+          if (!this.evolveQueue.some((q) => q.uid === ev.uid)) this.evolveQueue.push({ uid: ev.uid, into: ev.into });
           break;
         case 'capture':
           await this.captureAnim(ev.wobbles, ev.success);
@@ -540,7 +544,7 @@ export class BattleScene extends Phaser.Scene {
     if (this.state.outcome !== 'win') return;
     for (const e of this.evolveQueue) {
       const c = this.state.party.find((p) => p.uid === e.uid);
-      if (!c) continue;
+      if (!c || c.speciesId === e.into) continue; // already this species (stray dup) — don't replay
       audio.stopMusic();
       await this.say(`What? ${displayName(c)} is evolving!`);
       audio.sfx('jingle_evolve', 0.6);
