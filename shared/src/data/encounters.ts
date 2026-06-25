@@ -13,13 +13,15 @@ export const ENCOUNTER_ZONES: Record<string, EncounterZone> = {
     name: 'Whisperwood Route',
     levelRange: [1, 3],
     table: [
-      { species: 'grodent', weight: 30 },
-      { species: 'duvan', weight: 25 },
-      { species: 'moldole', weight: 20 },
-      { species: 'jestar', weight: 13 },
-      { species: 'drachnid', weight: 9 }, // a rare fire beast — gives off-type starters a plant answer for the Warden
-      { species: 'spookshroom', weight: 8 },
-      { species: 'draquatic', weight: 4 },
+      { species: 'grodent', weight: 22 },     // common rat (still the most common, but not half of all spawns)
+      { species: 'duvan', weight: 18 },        // common bird
+      { species: 'moldole', weight: 18 },
+      { species: 'jestar', weight: 14 },
+      { species: 'spookshroom', weight: 10 },
+      { species: 'drachnid', weight: 9 },      // rare fire beast
+      { species: 'draquatic', weight: 5 },     // rare water beast
+      { species: 'cardemon', weight: 2 },      // ~4% combined RARE FIND — exploring can turn up something cool
+      { species: 'magmaclaw', weight: 2 },     // a fierce fire elite — a lucky early catch
     ],
   },
   whisperwood_deep: {
@@ -27,12 +29,16 @@ export const ENCOUNTER_ZONES: Record<string, EncounterZone> = {
     name: 'Whisperwood (deep grass)',
     levelRange: [2, 5],
     table: [
-      { species: 'moldole', weight: 26 },
-      { species: 'jestar', weight: 22 },
-      { species: 'spookshroom', weight: 20 },
-      { species: 'duvan', weight: 16 },
-      { species: 'grodent', weight: 12 },
-      { species: 'draquatic', weight: 4 },
+      { species: 'moldole', weight: 22 },
+      { species: 'jestar', weight: 18 },
+      { species: 'spookshroom', weight: 16 },
+      { species: 'duvan', weight: 12 },
+      { species: 'grodent', weight: 10 },
+      { species: 'drachnid', weight: 6 },
+      { species: 'draquatic', weight: 6 },
+      { species: 'cardemon', weight: 4 },      // deep grass = better RARE-FIND odds (~10%)
+      { species: 'magmaclaw', weight: 4 },
+      { species: 'cindermaw', weight: 2 },     // a rare rock elite
     ],
   },
   emberhollow: {

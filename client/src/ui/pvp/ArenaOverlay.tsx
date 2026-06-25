@@ -140,18 +140,31 @@ function BattleArena() {
   const [switching, setSwitching] = useState(false);
   const [hitYou, setHitYou] = useState(false);
   const [hitOpp, setHitOpp] = useState(false);
+  const [lungeYou, setLungeYou] = useState(false);
+  const [lungeOpp, setLungeOpp] = useState(false);
+  const [dmgYou, setDmgYou] = useState<{ n: number; k: number } | null>(null);
+  const [dmgOpp, setDmgOpp] = useState<{ n: number; k: number } | null>(null);
   const [banner, setBanner] = useState('');
   const prevHp = useRef<{ y?: { uid: string; hp: number }; o?: { uid: string; hp: number } }>({});
   const queue = useRef<string[]>([]);
   const seenLen = useRef(0);
 
-  // Flash + shake the beast whose HP just dropped, so you SEE the hit land.
+  // Damage feedback: the attacker lunges, the beast that got hit flashes + shakes, and a floating
+  // "-N" pops over it. Derived from each side's HP drop between authoritative battle states.
   useEffect(() => {
     if (!view) return;
     const y = view.you.active, o = view.opponent.active;
     const { y: py, o: po } = prevHp.current;
-    if (py && py.uid === y.uid && y.currentHp < py.hp) { setHitYou(true); setTimeout(() => setHitYou(false), 420); }
-    if (po && po.uid === o.uid && o.currentHp < po.hp) { setHitOpp(true); setTimeout(() => setHitOpp(false), 420); }
+    if (po && po.uid === o.uid && o.currentHp < po.hp) {
+      setHitOpp(true); setTimeout(() => setHitOpp(false), 500);
+      setLungeYou(true); setTimeout(() => setLungeYou(false), 380);   // you dealt damage -> you lunge
+      setDmgOpp({ n: po.hp - o.currentHp, k: Date.now() });
+    }
+    if (py && py.uid === y.uid && y.currentHp < py.hp) {
+      setHitYou(true); setTimeout(() => setHitYou(false), 500);
+      setLungeOpp(true); setTimeout(() => setLungeOpp(false), 380);   // opp dealt damage -> opp lunges
+      setDmgYou({ n: py.hp - y.currentHp, k: Date.now() });
+    }
     prevHp.current = { y: { uid: y.uid, hp: y.currentHp }, o: { uid: o.uid, hp: o.currentHp } };
   }, [view]);
 
@@ -179,11 +192,12 @@ function BattleArena() {
     <div className="pvp-arena">
       <div className="pvp-top">
         <div className="pvp-name">{view.opponent.name} <BallRow total={view.opponent.partySize} alive={view.opponent.remaining} /></div>
-        <div className={`pvp-combatant enemy${hitOpp ? ' hit' : ''}${opp.currentHp <= 0 ? ' fainted' : ''}`}>
+        <div className={`pvp-combatant enemy${hitOpp ? ' hit' : ''}${lungeOpp ? ' attacking' : ''}${opp.currentHp <= 0 ? ' fainted' : ''}`}>
           <div className="pvp-hpbox">
             <div className="pvp-mon-name">{monName(opp)} <span className="lvl">Lv{opp.level}</span></div>
             <HpBar creature={opp} />
           </div>
+          {dmgOpp && <span key={dmgOpp.k} className="pvp-dmg">-{dmgOpp.n}</span>}
           <MonImg speciesId={opp.speciesId} size={104} shiny={opp.shiny} />
         </div>
       </div>
@@ -198,7 +212,8 @@ function BattleArena() {
       </div>
 
       <div className="pvp-bottom">
-        <div className={`pvp-combatant you${hitYou ? ' hit' : ''}${me.currentHp <= 0 ? ' fainted' : ''}`}>
+        <div className={`pvp-combatant you${hitYou ? ' hit' : ''}${lungeYou ? ' attacking' : ''}${me.currentHp <= 0 ? ' fainted' : ''}`}>
+          {dmgYou && <span key={dmgYou.k} className="pvp-dmg">-{dmgYou.n}</span>}
           <MonImg speciesId={me.speciesId} size={112} shiny={me.shiny} />
           <div className="pvp-hpbox">
             <div className="pvp-mon-name">{monName(me)} <span className="lvl">Lv{me.level}</span></div>

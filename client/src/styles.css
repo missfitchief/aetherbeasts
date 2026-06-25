@@ -614,9 +614,16 @@ html, body, #root {
 .turn-timer { display: inline-block; margin-left: 4px; padding: 1px 6px; border-radius: 5px; background: var(--panel2); border: 1px solid var(--line); font-size: 12px; }
 .turn-timer.low { color: var(--bad); border-color: var(--bad); }
 /* Arena battle feedback: hit flash/shake, faint dim, and the sequenced action banner. */
-@keyframes pvp-hit { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-5px); } 60% { transform: translateX(5px); } }
-.pvp-combatant.hit .mon-sprite { animation: pvp-hit 0.4s ease; filter: brightness(1.9) drop-shadow(0 0 7px #ff6a6a); }
+.pvp-combatant { position: relative; }
+@keyframes pvp-hit { 0%,100% { transform: translateX(0); } 15% { transform: translateX(-7px); } 45% { transform: translateX(7px); } 75% { transform: translateX(-4px); } }
+.pvp-combatant.hit .mon-sprite { animation: pvp-hit 0.5s ease; filter: brightness(2.2) drop-shadow(0 0 10px #ff5a5a); }
+@keyframes pvp-lunge-down { 0%,100% { transform: translateY(0); } 45% { transform: translateY(15px); } }
+@keyframes pvp-lunge-up { 0%,100% { transform: translateY(0); } 45% { transform: translateY(-15px); } }
+.pvp-combatant.enemy.attacking .mon-sprite { animation: pvp-lunge-down 0.38s ease; }
+.pvp-combatant.you.attacking .mon-sprite { animation: pvp-lunge-up 0.38s ease; }
 .pvp-combatant.fainted .mon-sprite { opacity: 0.32; filter: grayscale(0.85); transition: opacity 0.4s, filter 0.4s; }
+@keyframes pvp-dmg-float { 0% { opacity: 0; transform: translate(-50%, 4px); } 18% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -34px); } }
+.pvp-dmg { position: absolute; top: 0; left: 50%; color: #ff5a5a; font-weight: 900; font-size: 22px; text-shadow: 0 2px 4px #000; pointer-events: none; animation: pvp-dmg-float 1s ease forwards; z-index: 5; }
 @keyframes pvp-banner-in { 0% { opacity: 0; transform: translateY(7px) scale(0.94); } 18% { opacity: 1; transform: none; } 82% { opacity: 1; } 100% { opacity: 0.7; } }
 .pvp-banner { color: #ffd166; font-weight: 800; font-size: 16px; text-align: center; text-shadow: 0 1px 3px #000a; animation: pvp-banner-in 0.75s ease both; }
 .pvp-log { background: rgba(8,12,24,0.7); border: 2px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 8px 0; min-height: 86px; font-size: 13px; }

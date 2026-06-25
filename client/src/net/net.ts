@@ -361,7 +361,7 @@ function wire(s: Socket) {
     useNet.setState({ result: mo, myTurn: false, submitting: false, deadline: null });
     setTimeout(() => {
       if (useNet.getState().result?.matchId === mo.matchId) useNet.setState({ lobby: 'result' });
-    }, 1400);
+    }, 1800);
   });
 
   s.on('opponent:left', (p: { message: string }) => useNet.setState({ note: p.message }));
