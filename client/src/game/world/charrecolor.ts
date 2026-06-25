@@ -3,13 +3,17 @@
 // sprite yields many clean variants in the same style. Pure (no Phaser) so it
 // runs in both the React creator preview and the Phaser scene.
 
-/** The five engine body types the player can choose from. */
+/** The body types the player can choose from (engine sheets + new variants). */
 export const CHAR_BASES: { key: string; name: string }[] = [
   { key: 'sheet_player', name: 'Adventurer' },
   { key: 'sheet_guy', name: 'Rookie' },
-  { key: 'sheet_hiker', name: 'Ranger' },
-  { key: 'sheet_schoolgirl', name: 'Scholar' },
-  { key: 'sheet_professor', name: 'Elder' },
+  { key: 'sheet_hiker', name: 'Scout' },
+  { key: 'sheet_schoolgirl', name: 'Student' },
+  { key: 'sheet_professor', name: 'Scholar' },
+  { key: 'sheet_ranger', name: 'Ranger' },
+  { key: 'sheet_knight', name: 'Knight' },
+  { key: 'sheet_mage', name: 'Mage' },
+  { key: 'sheet_ninja', name: 'Ninja' },
 ];
 
 /** Outfit colours offered in the creator (hue rotations; 0 keeps the original). */
