@@ -36,9 +36,9 @@ export async function aetherBalance(owner: string | null): Promise<AetherBalance
   }
 }
 
-// Stable per-wallet fake balance (1000..9999) for sim mode.
-function simAmount(owner: string): number {
-  let h = 0;
-  for (let i = 0; i < owner.length; i++) h = (h * 31 + owner.charCodeAt(i)) >>> 0;
-  return 1000 + (h % 9000);
+// Sim mode shows 0 — a new player owns no $AETHER until they buy it (matches what a fresh
+// wallet reads on mainnet). They invest their own token to summon; the sim number used to be
+// a misleading per-wallet fake.
+function simAmount(_owner: string): number {
+  return 0;
 }

@@ -17,7 +17,7 @@ import type { SummonReport } from '../engine/gacha.js';
 export type Outcome = 'win' | 'lose' | 'draw';
 
 // ---- economy / timing constants -------------------------------------------
-export const STARTING_CREDITS = 1000;
+export const STARTING_CREDITS = 1000; // non-cashable PvP wager currency — not "monster money", left as-is
 export const DEFAULT_STAKE = 100;
 /** If a player's credits fall below this, top them back up to it once per day so
  *  nobody is permanently locked out of laddered play. */
