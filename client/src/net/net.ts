@@ -354,9 +354,13 @@ function wire(s: Socket) {
   });
 
   s.on('match:over', (mo: MatchOver) => {
-    useNet.setState({ lobby: 'result', result: mo, myTurn: false, submitting: false, deadline: null });
     curMatchId = null;
     curTurn = 0;
+    // Hold on the final hit + faint for a beat so a KO isn't an instant, confusing result pop.
+    useNet.setState({ result: mo, myTurn: false, submitting: false, deadline: null });
+    setTimeout(() => {
+      if (useNet.getState().result?.matchId === mo.matchId) useNet.setState({ lobby: 'result' });
+    }, 1400);
   });
 
   s.on('opponent:left', (p: { message: string }) => useNet.setState({ note: p.message }));

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getMove, getSpecies, statOf, TYPE_COLOR, rankOf, currentSeason, STAKED_PVP_TIERS, type Creature, type WagerCurrency } from '@aether/shared';
 import { useNet, findMatch, cancelMatch, submitMove, submitSwitch, forfeitMatch, leaveResult } from '../../net/net.js';
 import { useGame } from '../../state/store.js';
@@ -138,6 +138,31 @@ function BattleArena() {
   const deadline = useNet((s) => s.deadline);
   const note = useNet((s) => s.note);
   const [switching, setSwitching] = useState(false);
+  const [hitYou, setHitYou] = useState(false);
+  const [hitOpp, setHitOpp] = useState(false);
+  const [banner, setBanner] = useState('');
+  const prevHp = useRef<{ y?: { uid: string; hp: number }; o?: { uid: string; hp: number } }>({});
+  const queue = useRef<string[]>([]);
+  const seenLen = useRef(0);
+
+  // Flash + shake the beast whose HP just dropped, so you SEE the hit land.
+  useEffect(() => {
+    if (!view) return;
+    const y = view.you.active, o = view.opponent.active;
+    const { y: py, o: po } = prevHp.current;
+    if (py && py.uid === y.uid && y.currentHp < py.hp) { setHitYou(true); setTimeout(() => setHitYou(false), 420); }
+    if (po && po.uid === o.uid && o.currentHp < po.hp) { setHitOpp(true); setTimeout(() => setHitOpp(false), 420); }
+    prevHp.current = { y: { uid: y.uid, hp: y.currentHp }, o: { uid: o.uid, hp: o.currentHp } };
+  }, [view]);
+
+  // Stream the turn's narration one line at a time (a big banner) so you can read what happened.
+  useEffect(() => {
+    if (log.length > seenLen.current) { queue.current.push(...log.slice(seenLen.current)); seenLen.current = log.length; }
+  }, [log]);
+  useEffect(() => {
+    const id = setInterval(() => { if (queue.current.length) setBanner(queue.current.shift()!); }, 750);
+    return () => clearInterval(id);
+  }, []);
 
   if (!view) {
     return (
@@ -154,7 +179,7 @@ function BattleArena() {
     <div className="pvp-arena">
       <div className="pvp-top">
         <div className="pvp-name">{view.opponent.name} <BallRow total={view.opponent.partySize} alive={view.opponent.remaining} /></div>
-        <div className="pvp-combatant enemy">
+        <div className={`pvp-combatant enemy${hitOpp ? ' hit' : ''}${opp.currentHp <= 0 ? ' fainted' : ''}`}>
           <div className="pvp-hpbox">
             <div className="pvp-mon-name">{monName(opp)} <span className="lvl">Lv{opp.level}</span></div>
             <HpBar creature={opp} />
@@ -165,13 +190,15 @@ function BattleArena() {
 
       <div className="pvp-mid">
         <span className="pvp-stake">Pot: {view.stake * 2} {view.currency === 'lumen' ? '⬨' : '◈'}</span>
-        {myTurn ? <span className="pvp-turn you">Your move! <Countdown deadline={deadline} /></span>
+        {banner ? <span key={banner} className="pvp-banner">{banner}</span> : <span />}
+        {view.over ? <span className="pvp-turn">Battle over!</span>
+          : myTurn ? <span className="pvp-turn you">Your move! <Countdown deadline={deadline} /></span>
           : submitting ? <span className="pvp-turn">Waiting for opponent…</span>
           : <span className="pvp-turn">Opponent is choosing… <Countdown deadline={deadline} /></span>}
       </div>
 
       <div className="pvp-bottom">
-        <div className="pvp-combatant you">
+        <div className={`pvp-combatant you${hitYou ? ' hit' : ''}${me.currentHp <= 0 ? ' fainted' : ''}`}>
           <MonImg speciesId={me.speciesId} size={112} shiny={me.shiny} />
           <div className="pvp-hpbox">
             <div className="pvp-mon-name">{monName(me)} <span className="lvl">Lv{me.level}</span></div>

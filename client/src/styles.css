@@ -305,7 +305,7 @@ html, body, #root {
 .party-card .lv { color: var(--muted); font-size: 12px; }
 
 .hpbar { width: 100%; height: 8px; border-radius: 2px; background: #0008; overflow: hidden; border: 1px solid #0006; }
-.hpbar > div { height: 100%; transition: width 0.3s; }
+.hpbar > div { height: 100%; transition: width 0.5s ease; }
 
 .type-chip {
   display: inline-block;
@@ -613,6 +613,12 @@ html, body, #root {
 .pvp-turn.you { color: var(--good); font-weight: 700; }
 .turn-timer { display: inline-block; margin-left: 4px; padding: 1px 6px; border-radius: 5px; background: var(--panel2); border: 1px solid var(--line); font-size: 12px; }
 .turn-timer.low { color: var(--bad); border-color: var(--bad); }
+/* Arena battle feedback: hit flash/shake, faint dim, and the sequenced action banner. */
+@keyframes pvp-hit { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-5px); } 60% { transform: translateX(5px); } }
+.pvp-combatant.hit .mon-sprite { animation: pvp-hit 0.4s ease; filter: brightness(1.9) drop-shadow(0 0 7px #ff6a6a); }
+.pvp-combatant.fainted .mon-sprite { opacity: 0.32; filter: grayscale(0.85); transition: opacity 0.4s, filter 0.4s; }
+@keyframes pvp-banner-in { 0% { opacity: 0; transform: translateY(7px) scale(0.94); } 18% { opacity: 1; transform: none; } 82% { opacity: 1; } 100% { opacity: 0.7; } }
+.pvp-banner { color: #ffd166; font-weight: 800; font-size: 16px; text-align: center; text-shadow: 0 1px 3px #000a; animation: pvp-banner-in 0.75s ease both; }
 .pvp-log { background: rgba(8,12,24,0.7); border: 2px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 8px 0; min-height: 86px; font-size: 13px; }
 .pvp-log-line { color: var(--text); opacity: 0.92; line-height: 1.5; }
 .pvp-note { text-align: center; color: var(--accent2); font-size: 12px; margin-bottom: 6px; }
