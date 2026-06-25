@@ -71,6 +71,7 @@ export interface AuthOk {
   serverNow: number;
   onchainSummon: boolean; // is the on-chain $AETHER gacha live (mint+treasury set)?
   exchangeEnabled: boolean; // is the LUMEN -> $AETHER Exchange (cash-out) open?
+  stakedPvpEnabled: boolean; // are LUMEN PvP wagers open?
 }
 
 // ---- battle views (always rendered from the recipient's perspective) -------
@@ -89,21 +90,28 @@ export interface PvpBattleView {
   over: boolean;
   outcome: Outcome | null; // from "you" perspective
   stake: number;
+  currency: WagerCurrency;
 }
+
+/** What's wagered in a PvP match: Battle Credits (soft) or LUMEN (cashable). */
+export type WagerCurrency = 'credits' | 'lumen';
 
 export interface MatchFound {
   matchId: string;
   you: string;
   opponent: string;
   stake: number;
+  currency: WagerCurrency;
 }
 
 export interface MatchOver {
   matchId: string;
   outcome: Outcome;
-  potAwarded: number; // credits the recipient gained (0 unless winner)
-  credits: number;    // recipient's new balance
+  potAwarded: number; // amount the recipient gained (0 unless winner)
+  credits: number;    // recipient's new Battle Credits balance
+  lumen?: number;     // recipient's new LUMEN balance (LUMEN wagers only)
   rating: number;
+  currency: WagerCurrency;
   message: string;
 }
 
@@ -180,7 +188,7 @@ export interface ServerToClient {
   'save:saved': (p: { at: number }) => void;
   'profile:update': (p: PublicProfile) => void;
   'balance:aether': (p: AetherBalance) => void;
-  'match:queued': (p: { stake: number }) => void;
+  'match:queued': (p: { stake: number; currency: WagerCurrency }) => void;
   'match:cancelled': () => void;
   'match:found': (p: MatchFound) => void;
   'battle:state': (p: PvpBattleView) => void;
@@ -221,7 +229,7 @@ export interface ClientToServer {
   'auth:verify': (p: { publicKey: string; signature: string; nonce: string }) => void;
   'save:push': (p: { save: SaveData }) => void;
   'balance:get': (p: { owner?: string }) => void;
-  'match:find': (p: { stake?: number }) => void;
+  'match:find': (p: { stake?: number; currency?: WagerCurrency }) => void;
   'match:cancel': () => void;
   'battle:action': (p: BattleActionMsg) => void;
   'battle:forfeit': (p: { matchId: string }) => void;

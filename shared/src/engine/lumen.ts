@@ -65,6 +65,21 @@ export const LUMEN_MILESTONES: Record<string, number> = {
   champion: 40, // beat the Aether Champion
 };
 
+/** Staked-PvP wager tiers (LUMEN) the player can ante. */
+export const STAKED_PVP_TIERS = [10, 50, 100] as const;
+/** House rake on a wager pot — BURNED (removed from supply), never routed to the pool. */
+export const WAGER_RAKE = 0.10;
+/**
+ * Settle a LUMEN wager: both players ante `stake` (pot = 2×stake); the winner takes the
+ * pot minus a rake that is BURNED. Self-funding (winnings come from the loser's stake,
+ * never the Rewards Pool/treasury) and deflationary (the rake leaves circulation).
+ */
+export function wagerPayout(stake: number): { pot: number; rake: number; toWinner: number } {
+  const pot = stake * 2;
+  const rake = Math.round(pot * WAGER_RAKE);
+  return { pot, rake, toWinner: pot - rake };
+}
+
 /** LUMEN sink prices (give players in-game reasons to SPEND LUMEN, not just cash out). */
 export const LUMEN_SINK = {
   awaken: [8, 20, 50, 120, 280] as const, // cost to awaken to star 1..5 (per beast)

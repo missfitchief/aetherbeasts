@@ -18,6 +18,7 @@ import type {
   ExchangeResult,
   PresencePlayer,
   Creature,
+  WagerCurrency,
 } from '@aether/shared';
 import { DEFAULT_STAKE, addItem } from '@aether/shared';
 import { useGame } from '../state/store.js';
@@ -54,6 +55,7 @@ interface NetState {
   arenaOpen: boolean;
   lobby: Lobby;
   stake: number;
+  currency: WagerCurrency;
   view: PvpBattleView | null;
   log: string[];
   myTurn: boolean;
@@ -69,10 +71,13 @@ interface NetState {
   questView: QuestView | null;
   /** The LUMEN -> $AETHER Exchange (cash-out) — open only when the server enables it. */
   exchangeEnabled: boolean;
+  /** Staked-PvP LUMEN wagers — open only when the server enables them. */
+  stakedPvpEnabled: boolean;
   exchangeQuote: ExchangeQuote | null;
   exchangeBusy: boolean;
   setArena: (open: boolean) => void;
   setStake: (n: number) => void;
+  setCurrency: (c: WagerCurrency) => void;
   clearSummonReport: () => void;
 }
 
@@ -87,6 +92,7 @@ export const useNet = create<NetState>((set) => ({
   arenaOpen: false,
   lobby: 'idle',
   stake: DEFAULT_STAKE,
+  currency: 'credits',
   view: null,
   log: [],
   myTurn: false,
@@ -98,10 +104,12 @@ export const useNet = create<NetState>((set) => ({
   summonReport: null,
   questView: null,
   exchangeEnabled: false,
+  stakedPvpEnabled: false,
   exchangeQuote: null,
   exchangeBusy: false,
   setArena: (open) => set({ arenaOpen: open }),
   setStake: (n) => set({ stake: n }),
+  setCurrency: (c) => set({ currency: c }),
   clearSummonReport: () => set({ summonReport: null }),
 }));
 
@@ -239,7 +247,7 @@ function wire(s: Socket) {
 
   s.on('auth:ok', (p: AuthOk) => {
     localStorage.setItem(TOKEN_KEY, p.token);
-    useNet.setState({ status: 'online', socketReady: true, authFailed: false, profile: p.profile, wallet: p.profile.wallet, onchainSummon: p.onchainSummon, exchangeEnabled: p.exchangeEnabled });
+    useNet.setState({ status: 'online', socketReady: true, authFailed: false, profile: p.profile, wallet: p.profile.wallet, onchainSummon: p.onchainSummon, exchangeEnabled: p.exchangeEnabled, stakedPvpEnabled: p.stakedPvpEnabled });
 
     // Only reconcile the save on the first auth or an explicit wallet sign-in.
     const explicit = !firstAuthDone || walletLoginPending;
@@ -463,7 +471,7 @@ export function retryConnect() {
   else ensureSocket();
 }
 
-export function findMatch(stake: number) {
+export function findMatch(stake: number, currency: WagerCurrency = 'credits') {
   const s = ensureSocket();
   if (!s.connected) {
     toast('Connecting to the arena server…');
@@ -475,13 +483,18 @@ export function findMatch(stake: number) {
     return;
   }
   const profile = useNet.getState().profile;
-  if (profile && profile.credits < stake) {
+  if (currency === 'lumen') {
+    if (profile && (profile.lumen ?? 0) < stake) {
+      toast(`Not enough LUMEN to stake ${stake} — earn more by playing.`);
+      return;
+    }
+  } else if (profile && profile.credits < stake) {
     toast(`Not enough Battle Credits to stake ${stake}.`);
     return;
   }
   flushSave(); // make sure the server battles with our current team (ordered before match:find)
-  useNet.setState({ stake, lobby: 'queued', result: null, note: null });
-  s.emit('match:find', { stake });
+  useNet.setState({ stake, currency, lobby: 'queued', result: null, note: null });
+  s.emit('match:find', { stake, currency });
 }
 
 export function cancelMatch() {

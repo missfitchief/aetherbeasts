@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   emissionFactor, tau, poolCreditFromRevenue, redeemQuote, isRedeemEligible,
-  TAU_FLOOR, TAU_MAX, REDEEM_MIN_LUMEN, POOL_FUNDING_RATE, rankedWinLumen, RANKED_WIN_LUMEN,
+  TAU_FLOOR, TAU_MAX, REDEEM_MIN_LUMEN, POOL_FUNDING_RATE, rankedWinLumen, RANKED_WIN_LUMEN, wagerPayout,
 } from './lumen.js';
 
 describe('emission + tax governors', () => {
@@ -80,6 +80,14 @@ describe('gameplay earning', () => {
     expect(rankedWinLumen(1000)).toBe(RANKED_WIN_LUMEN.Silver);
     expect(rankedWinLumen(1600)).toBe(RANKED_WIN_LUMEN.Master);
     expect(rankedWinLumen(99999)).toBe(RANKED_WIN_LUMEN.Master);
+  });
+});
+
+describe('staked PvP wager', () => {
+  it('winner takes the pot minus a burned 10% rake', () => {
+    expect(wagerPayout(10)).toEqual({ pot: 20, rake: 2, toWinner: 18 });
+    expect(wagerPayout(50)).toEqual({ pot: 100, rake: 10, toWinner: 90 });
+    expect(wagerPayout(100)).toEqual({ pot: 200, rake: 20, toWinner: 180 });
   });
 });
 

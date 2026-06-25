@@ -25,9 +25,12 @@ import {
   DAILY_CREDIT_FLOOR,
   applyProgress,
   toQuestView,
+  wagerPayout,
+  STAKED_PVP_TIERS,
+  type WagerCurrency,
 } from '@aether/shared';
 import { Store, publicProfile } from './store.js';
-import { LUMEN_ENABLED } from './config.js';
+import { LUMEN_ENABLED, STAKED_PVP_ENABLED } from './config.js';
 
 interface MatchSide {
   id: string; // playerId
@@ -42,6 +45,7 @@ interface Match {
   state: BattleState;
   rng: RNG;
   stake: number;
+  currency: WagerCurrency;
   a: MatchSide; // canonical 'player'
   b: MatchSide; // canonical 'enemy'
   pending: Map<string, PlayerAction>; // playerId -> action chosen for current turn
@@ -55,6 +59,7 @@ interface Waiting {
   socketId: string;
   name: string;
   stake: number;
+  currency: WagerCurrency;
 }
 
 /**
@@ -85,33 +90,42 @@ export class MatchManager {
   }
 
   // ---- matchmaking ---------------------------------------------------------
-  find(playerId: string, socketId: string, name: string, stakeRaw?: number) {
+  find(playerId: string, socketId: string, name: string, stakeRaw?: number, currency: WagerCurrency = 'credits') {
     if (this.playerMatch.has(playerId)) {
       this.err(socketId, 'You are already in a match.');
       return;
     }
-    const stake = clampStake(stakeRaw);
+    if (currency === 'lumen' && !STAKED_PVP_ENABLED) {
+      this.err(socketId, 'LUMEN wagers are not open yet.');
+      return;
+    }
+    const stake = currency === 'lumen' ? clampLumenStake(stakeRaw) : clampStake(stakeRaw);
     const party = this.battleParty(playerId);
     if (!party) {
       this.err(socketId, 'Your team is empty — catch or summon a beast before battling.');
       return;
     }
-    this.store.applyDailyFloor(playerId, DAILY_CREDIT_FLOOR);
-    if (!this.store.hasCredits(playerId, stake)) {
-      this.err(socketId, `Not enough Battle Credits to stake ${stake}.`);
+    if (currency === 'credits') {
+      this.store.applyDailyFloor(playerId, DAILY_CREDIT_FLOOR);
+      if (!this.store.hasCredits(playerId, stake)) {
+        this.err(socketId, `Not enough Battle Credits to stake ${stake}.`);
+        return;
+      }
+    } else if (this.store.getLumen(playerId) < stake) {
+      this.err(socketId, `Not enough LUMEN to stake ${stake} — earn more by playing.`);
       return;
     }
 
-    // drop any previous queue entry for this player, then try to pair
+    // drop any previous queue entry for this player, then try to pair (same currency + stake)
     this.queue = this.queue.filter((w) => w.playerId !== playerId);
-    const oppIdx = this.queue.findIndex((w) => w.stake === stake && w.playerId !== playerId);
+    const oppIdx = this.queue.findIndex((w) => w.stake === stake && w.currency === currency && w.playerId !== playerId);
     if (oppIdx === -1) {
-      this.queue.push({ playerId, socketId, name, stake });
-      this.emit(socketId, 'match:queued', { stake });
+      this.queue.push({ playerId, socketId, name, stake, currency });
+      this.emit(socketId, 'match:queued', { stake, currency });
       return;
     }
     const opp = this.queue.splice(oppIdx, 1)[0];
-    this.start(opp, { playerId, socketId, name, stake });
+    this.start(opp, { playerId, socketId, name, stake, currency });
   }
 
   cancel(playerId: string) {
@@ -128,15 +142,17 @@ export class MatchManager {
       return;
     }
     const stake = aw.stake;
+    const currency = aw.currency;
+    const cur = currency === 'lumen' ? 'LUMEN' : 'Battle Credits';
     // Escrow the stake from BOTH players (server-authoritative). Roll back on failure.
-    if (!this.store.escrow(aw.playerId, stake)) {
-      this.err(aw.socketId, 'Not enough Battle Credits.');
+    if (!this.debit(currency, aw.playerId, stake)) {
+      this.err(aw.socketId, `Not enough ${cur}.`);
       this.err(bw.socketId, 'Opponent could not cover the stake — requeue.');
       return;
     }
-    if (!this.store.escrow(bw.playerId, stake)) {
-      this.store.award(aw.playerId, stake); // refund A
-      this.err(bw.socketId, 'Not enough Battle Credits.');
+    if (!this.debit(currency, bw.playerId, stake)) {
+      this.credit(currency, aw.playerId, stake); // refund A
+      this.err(bw.socketId, `Not enough ${cur}.`);
       this.err(aw.socketId, 'Opponent could not cover the stake — requeue.');
       return;
     }
@@ -148,6 +164,7 @@ export class MatchManager {
       state,
       rng: seededRng(seed),
       stake,
+      currency,
       a: { id: aw.playerId, socketId: aw.socketId, name: aw.name, side: 'player', connected: true },
       b: { id: bw.playerId, socketId: bw.socketId, name: bw.name, side: 'enemy', connected: true },
       pending: new Map(),
@@ -160,7 +177,7 @@ export class MatchManager {
 
     for (const ms of [match.a, match.b]) {
       const opp = ms === match.a ? match.b : match.a;
-      this.emit(ms.socketId, 'match:found', { matchId: match.id, you: ms.name, opponent: opp.name, stake });
+      this.emit(ms.socketId, 'match:found', { matchId: match.id, you: ms.name, opponent: opp.name, stake, currency });
     }
     this.pushState(match);
     this.beginTurn(match);
@@ -247,8 +264,8 @@ export class MatchManager {
   private abortMatch(match: Match, message: string) {
     if (match.done) return;
     match.done = true;
-    this.store.award(match.a.id, match.stake);
-    this.store.award(match.b.id, match.stake);
+    this.credit(match.currency, match.a.id, match.stake); // refund both antes (no rake on abort)
+    this.credit(match.currency, match.b.id, match.stake);
     for (const ms of [match.a, match.b]) {
       if (!ms.connected) continue;
       this.emit(ms.socketId, 'error', { message });
@@ -258,7 +275,9 @@ export class MatchManager {
         outcome: 'draw',
         potAwarded: match.stake,
         credits: rec?.credits ?? 0,
+        lumen: rec?.lumen ?? 0,
         rating: rec?.rating ?? 1000,
+        currency: match.currency,
         message,
       });
     }
@@ -270,7 +289,8 @@ export class MatchManager {
     match.done = true;
     const outcome = match.state.outcome as Outcome; // 'win' (A) | 'lose' (B) | 'draw'
     const stake = match.stake;
-    const pot = stake * 2;
+    // LUMEN wagers take a BURNED rake off the winner's pot; credits pay the full pot.
+    const winnerTakes = match.currency === 'lumen' ? wagerPayout(stake).toWinner : stake * 2;
     const aRec = this.store.getById(match.a.id);
     const bRec = this.store.getById(match.b.id);
     const aRating = aRec?.rating ?? 1000;
@@ -283,21 +303,21 @@ export class MatchManager {
       aGain = bGain = stake; // refund each ante
     } else if (outcome === 'win') {
       aOut = 'win'; bOut = 'lose';
-      aGain = pot; bGain = 0;
+      aGain = winnerTakes; bGain = 0;
       aRD = elo(aRating, bRating, 1); bRD = elo(bRating, aRating, 0);
     } else {
       aOut = 'lose'; bOut = 'win';
-      aGain = 0; bGain = pot;
+      aGain = 0; bGain = winnerTakes;
       bRD = elo(bRating, aRating, 1); aRD = elo(aRating, bRating, 0);
     }
 
-    this.store.award(match.a.id, aGain);
-    this.store.award(match.b.id, bGain);
+    this.credit(match.currency, match.a.id, aGain);
+    this.credit(match.currency, match.b.id, bGain);
     this.store.recordResult(match.a.id, aOut, aRD);
     this.store.recordResult(match.b.id, bOut, bRD);
-    const lumenOk = !match.forfeited; // forfeit/run wins don't pay cashable LUMEN
-    this.bumpPvpWin(match.a, aOut, lumenOk);
-    this.bumpPvpWin(match.b, bOut, lumenOk);
+    const lumenOk = !match.forfeited; // forfeit/run wins don't pay the ranked LUMEN drip
+    this.bumpPvpWin(match, match.a, aOut, lumenOk);
+    this.bumpPvpWin(match, match.b, bOut, lumenOk);
 
     this.sendOver(match, match.a, aOut, aGain);
     this.sendOver(match, match.b, bOut, bGain);
@@ -306,10 +326,11 @@ export class MatchManager {
   }
 
   /** A PvP win authoritatively advances the player's pvp_win quests. */
-  private bumpPvpWin(ms: MatchSide, outcome: Outcome, lumenEligible: boolean) {
+  private bumpPvpWin(match: Match, ms: MatchSide, outcome: Outcome, lumenEligible: boolean) {
     if (outcome !== 'win') return;
     const now = Date.now();
-    if (LUMEN_ENABLED && lumenEligible) this.store.grantRankedWinLumen(ms.id, now); // ranked LUMEN drip (daily-capped; not on forfeits)
+    // The ranked LUMEN drip belongs to the credits ("ranked") ladder; LUMEN wagers pay the pot instead.
+    if (match.currency === 'credits' && LUMEN_ENABLED && lumenEligible) this.store.grantRankedWinLumen(ms.id, now);
     const qs = this.store.getQuests(ms.id, now);
     if (qs && applyProgress(qs, 'pvp_win', 1)) {
       this.store.saveQuests(ms.id);
@@ -319,19 +340,22 @@ export class MatchManager {
 
   private sendOver(match: Match, ms: MatchSide, outcome: Outcome, gain: number) {
     const rec = this.store.getById(ms.id);
+    const unit = match.currency === 'lumen' ? 'LUMEN' : 'Battle Credits';
     const message =
       outcome === 'win'
-        ? `Victory! You won the pot — +${gain} Battle Credits.`
+        ? `Victory! You won the pot — +${gain} ${unit}.`
         : outcome === 'draw'
           ? `Draw — your ${match.stake} stake was returned.`
-          : `Defeated — you lost your ${match.stake} stake.`;
+          : `Defeated — you lost your ${match.stake} ${unit} stake.`;
     if (ms.connected) {
       this.emit(ms.socketId, 'match:over', {
         matchId: match.id,
         outcome,
         potAwarded: gain,
         credits: rec?.credits ?? 0,
+        lumen: rec?.lumen ?? 0,
         rating: rec?.rating ?? 1000,
+        currency: match.currency,
         message,
       });
       if (rec) this.emit(ms.socketId, 'profile:update', publicProfile(rec));
@@ -365,7 +389,7 @@ export class MatchManager {
     const g = this.graceTimers.get(playerId);
     if (g) { clearTimeout(g); this.graceTimers.delete(playerId); }
     const opp = ms === match.a ? match.b : match.a;
-    this.emit(ms.socketId, 'match:found', { matchId: match.id, you: ms.name, opponent: opp.name, stake: match.stake });
+    this.emit(ms.socketId, 'match:found', { matchId: match.id, you: ms.name, opponent: opp.name, stake: match.stake, currency: match.currency });
     this.emit(ms.socketId, 'battle:state', this.viewFor(match, ms.side));
     if (!match.pending.has(playerId)) {
       this.emit(ms.socketId, 'battle:yourTurn', { matchId: match.id, turn: match.turn, deadline: Date.now() + TURN_TIMEOUT_MS });
@@ -401,6 +425,17 @@ export class MatchManager {
     if (match.a.id === playerId) return match.a;
     if (match.b.id === playerId) return match.b;
     return null;
+  }
+
+  /** Debit a wager stake in the match's currency. Returns false if underfunded. */
+  private debit(currency: WagerCurrency, id: string, amount: number): boolean {
+    return currency === 'lumen' ? this.store.spendLumen(id, amount) : this.store.escrow(id, amount);
+  }
+  /** Credit a payout/refund in the match's currency (LUMEN winnings are instantly redeemable). */
+  private credit(currency: WagerCurrency, id: string, amount: number): void {
+    if (amount <= 0) return;
+    if (currency === 'lumen') this.store.grantLumen(id, amount, 'wager');
+    else this.store.award(id, amount);
   }
 
   // Build a battle team from the player's CLIENT-OWNED save. The save is
@@ -478,6 +513,7 @@ export class MatchManager {
       over: s.over,
       outcome: s.outcome === null ? null : outcomeFor(side, s.outcome),
       stake: match.stake,
+      currency: match.currency,
     };
   }
 }
@@ -546,6 +582,12 @@ function clampStake(stake?: number): number {
   const n = Number(stake);
   if (!Number.isFinite(n) || n <= 0) return DEFAULT_STAKE;
   return Math.min(1000, Math.max(10, Math.round(n)));
+}
+
+/** A LUMEN wager must be one of the fixed tiers (so both sides queue at the same ante). */
+function clampLumenStake(stake?: number): number {
+  const n = Math.round(Number(stake));
+  return (STAKED_PVP_TIERS as readonly number[]).includes(n) ? n : STAKED_PVP_TIERS[0];
 }
 
 /** Canonical outcome (side A's perspective) -> the given side's perspective. */

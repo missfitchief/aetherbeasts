@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getMove, getSpecies, statOf, TYPE_COLOR, rankOf, currentSeason, type Creature } from '@aether/shared';
+import { getMove, getSpecies, statOf, TYPE_COLOR, rankOf, currentSeason, STAKED_PVP_TIERS, type Creature, type WagerCurrency } from '@aether/shared';
 import { useNet, findMatch, cancelMatch, submitMove, submitSwitch, forfeitMatch, leaveResult } from '../../net/net.js';
 import { useGame } from '../../state/store.js';
 import { MonImg, HpBar } from '../components.js';
@@ -19,17 +19,25 @@ function Lobby() {
   const profile = useNet((s) => s.profile);
   const lobby = useNet((s) => s.lobby);
   const stake = useNet((s) => s.stake);
+  const currency = useNet((s) => s.currency);
+  const stakedPvpEnabled = useNet((s) => s.stakedPvpEnabled);
   const setArena = useNet((s) => s.setArena);
   const setStake = useNet((s) => s.setStake);
+  const setCurrency = useNet((s) => s.setCurrency);
   const note = useNet((s) => s.note);
   const party = useGame((s) => s.save?.party ?? []);
 
   const credits = profile?.credits ?? 0;
+  const lumen = profile?.lumen ?? 0;
   const rating = profile?.rating ?? 1000;
   const rank = rankOf(rating);
   const season = currentSeason(Date.now());
   const daysLeft = Math.max(1, Math.ceil((season.endsAt - Date.now()) / 86_400_000));
-  const tiers = [50, 100, 250, 500];
+  const isLumen = currency === 'lumen';
+  const tiers = isLumen ? [...STAKED_PVP_TIERS] : [50, 100, 250, 500];
+  const sym = isLumen ? '⬨' : '◈';
+  const balance = isLumen ? lumen : credits;
+  const pickCurrency = (c: WagerCurrency) => { setCurrency(c); setStake(c === 'lumen' ? STAKED_PVP_TIERS[0] : 50); };
   // Closing while searching must also leave the server queue (no ghost entries).
   const close = () => {
     if (lobby === 'queued') cancelMatch();
@@ -44,7 +52,7 @@ function Lobby() {
           <button className="icon-btn" aria-label="Close arena" onClick={close}>✕</button>
         </div>
 
-        <div className="arena-sub">Real-time PvP. Stake Battle Credits — winner takes the pot.</div>
+        <div className="arena-sub">Real-time PvP. {isLumen ? 'Stake LUMEN — winner takes the pot (10% burned).' : 'Stake Battle Credits — winner takes the pot.'}</div>
         <div className="arena-sub" style={{ marginTop: -4 }}>Season {season.id} · ends in {daysLeft}d · climb the ladder for Season Points.</div>
 
         <div className="arena-stats">
@@ -62,12 +70,22 @@ function Lobby() {
           </div>
         </div>
 
+        {stakedPvpEnabled && (
+          <div className="arena-stake">
+            <label className="muted small">Wager</label>
+            <div className="arena-stake-row">
+              <button className={'stake-chip' + (!isLumen ? ' active' : '')} disabled={lobby === 'queued'} onClick={() => pickCurrency('credits')}>◈ Credits</button>
+              <button className={'stake-chip' + (isLumen ? ' active' : '')} disabled={lobby === 'queued'} onClick={() => pickCurrency('lumen')}>⬨ LUMEN (real $)</button>
+            </div>
+          </div>
+        )}
+
         <div className="arena-stake">
-          <label className="muted small">Stake</label>
+          <label className="muted small">Stake{isLumen ? ` — you hold ${lumen} ⬨` : ''}</label>
           <div className="arena-stake-row">
             {tiers.map((t) => (
               <button key={t} className={'stake-chip' + (t === stake ? ' active' : '')} disabled={lobby === 'queued'}
-                onClick={() => setStake(t)}>{t} ◈</button>
+                onClick={() => setStake(t)}>{t} {sym}</button>
             ))}
           </div>
         </div>
@@ -78,20 +96,22 @@ function Lobby() {
 
         {lobby === 'queued' ? (
           <div className="arena-actions">
-            <div className="searching"><span className="spinner" /> Searching for an opponent at {stake} ◈…</div>
+            <div className="searching"><span className="spinner" /> Searching for an opponent at {stake} {sym}…</div>
             <button className="btn" onClick={cancelMatch}>Cancel</button>
           </div>
         ) : (
           <div className="arena-actions">
-            <button className="btn big gold" disabled={status !== 'online' || party.length === 0 || credits < stake}
-              onClick={() => findMatch(stake)}>
-              Quick Match — stake {stake} ◈
+            <button className="btn big gold" disabled={status !== 'online' || party.length === 0 || balance < stake}
+              onClick={() => findMatch(stake, currency)}>
+              Quick Match — stake {stake} {sym}
             </button>
           </div>
         )}
 
         <div className="arena-foot muted small">
-          Battle Credits are an in-game soft currency — they are never cashed out or sent on-chain.
+          {isLumen
+            ? 'LUMEN wagers are real-money: winnings come from your opponent’s stake (a 10% rake is burned). Withdraw via the Aether Exchange.'
+            : 'Battle Credits are an in-game soft currency — never cashed out or sent on-chain.'}
         </div>
       </div>
     </div>
@@ -144,7 +164,7 @@ function BattleArena() {
       </div>
 
       <div className="pvp-mid">
-        <span className="pvp-stake">Pot: {view.stake * 2} ◈</span>
+        <span className="pvp-stake">Pot: {view.stake * 2} {view.currency === 'lumen' ? '⬨' : '◈'}</span>
         {myTurn ? <span className="pvp-turn you">Your move! <Countdown deadline={deadline} /></span>
           : submitting ? <span className="pvp-turn">Waiting for opponent…</span>
           : <span className="pvp-turn">Opponent is choosing… <Countdown deadline={deadline} /></span>}
@@ -217,17 +237,19 @@ function ResultCard() {
   if (!result) return null;
   const cls = result.outcome === 'win' ? 'win' : result.outcome === 'draw' ? 'draw' : 'lose';
   const title = result.outcome === 'win' ? 'VICTORY' : result.outcome === 'draw' ? 'DRAW' : 'DEFEAT';
+  const isLumen = result.currency === 'lumen';
+  const bal = isLumen ? (result.lumen ?? 0) : result.credits;
   return (
     <div className="arena-overlay">
       <div className={`result-card ${cls}`} onClick={(e) => e.stopPropagation()}>
         <div className="result-title">{title}</div>
         <div className="result-msg">{result.message}</div>
         <div className="result-stats">
-          <div><span>◈ {result.credits.toLocaleString()}</span><label>Battle Credits</label></div>
+          <div><span>{isLumen ? '⬨' : '◈'} {bal.toLocaleString()}</span><label>{isLumen ? 'LUMEN' : 'Battle Credits'}</label></div>
           <div><span>{result.rating}</span><label>Rating</label></div>
         </div>
         <div className="result-actions">
-          <button className="btn big gold" onClick={() => { leaveResult(); findMatch(stake); }}>Find Another</button>
+          <button className="btn big gold" onClick={() => { leaveResult(); findMatch(stake, result.currency); }}>Find Another</button>
           <button className="btn" onClick={leaveResult}>Back to Arena</button>
         </div>
       </div>

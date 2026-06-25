@@ -51,6 +51,10 @@ export const LUMEN_ENABLED = process.env.LUMEN_ENABLED === 'true';
  *  treasury payout signer is intentionally NOT wired in code — turning this on with
  *  real funds is a deliberate operator step. */
 export const EXCHANGE_ENABLED = process.env.EXCHANGE_ENABLED === 'true' && LUMEN_ENABLED && ONCHAIN_SUMMON_ENABLED;
+/** Staked-PvP LUMEN wagers (real-money gambling — HARD kill-switch, default OFF). Requires
+ *  LUMEN emission on. Self-funding (winner takes the loser's stake minus a burned rake);
+ *  does NOT touch the Rewards Pool. Enable deliberately after a red-team audit + counsel. */
+export const STAKED_PVP_ENABLED = process.env.STAKED_PVP_ENABLED === 'true' && LUMEN_ENABLED;
 export const summonUsd = (count: number): number => (count >= 10 ? SUMMON_USD_10 : SUMMON_USD_1);
 
 // --- LUMEN -> $AETHER Exchange payout (treasury signer + ceilings) ----------

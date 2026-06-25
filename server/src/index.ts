@@ -1,9 +1,9 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { Server, type Socket } from 'socket.io';
-import type { SaveData, PlayerAction, SummonReport, QuestProgressType, PresenceEnterMsg, PresenceMoveMsg, Creature } from '@aether/shared';
+import type { SaveData, PlayerAction, SummonReport, QuestProgressType, PresenceEnterMsg, PresenceMoveMsg, Creature, WagerCurrency } from '@aether/shared';
 import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, claimLoginReward, addItem, createCreature, toQuestView, poolCreditFromRevenue, LUMEN_FAUCET, redeemQuote, isRedeemEligible, REDEEM_MIN_LUMEN } from '@aether/shared';
-import { PORT, corsOrigin, TREASURY_ADDRESS, AETHER_MINT, AETHER_DECIMALS, QUOTE_TTL_MS, ONCHAIN_SUMMON_ENABLED, LUMEN_ENABLED, EXCHANGE_ENABLED, validateConfig } from './config.js';
+import { PORT, corsOrigin, TREASURY_ADDRESS, AETHER_MINT, AETHER_DECIMALS, QUOTE_TTL_MS, ONCHAIN_SUMMON_ENABLED, LUMEN_ENABLED, EXCHANGE_ENABLED, STAKED_PVP_ENABLED, validateConfig } from './config.js';
 import { Store, publicProfile, type PlayerRecord } from './store.js';
 import { buildLoginMessage, verifySignature } from './auth.js';
 import { aetherBalance } from './balance.js';
@@ -63,6 +63,7 @@ function authOk(socket: Socket, rec: PlayerRecord) {
     serverNow: Date.now(),
     onchainSummon: ONCHAIN_SUMMON_ENABLED,
     exchangeEnabled: EXCHANGE_ENABLED,
+    stakedPvpEnabled: STAKED_PVP_ENABLED,
   });
   if (!bound.has(socket.id)) {
     bind(socket);
@@ -102,12 +103,12 @@ function bind(socket: Socket) {
     socket.emit('balance:aether', await aetherBalance(owner));
   });
 
-  socket.on('match:find', (p: { stake?: number } = {}) => {
+  socket.on('match:find', (p: { stake?: number; currency?: WagerCurrency } = {}) => {
     const id = pid();
     if (!id) return;
     const rec = store.getById(id);
     if (!rec) return;
-    matches.find(id, socket.id, rec.name, p.stake);
+    matches.find(id, socket.id, rec.name, p.stake, p.currency);
   });
 
   socket.on('match:cancel', () => {
