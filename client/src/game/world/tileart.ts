@@ -259,11 +259,26 @@ function shimmerFrame(phase: number): HTMLCanvasElement {
   return c;
 }
 
+// A void rift: a soft purple glow + star sparkles, drawn OVER the floor so the encounter
+// patch reads as a magical rift on the League hall's wood — not a random green lawn.
+function riftOverlay(seed: number): HTMLCanvasElement {
+  const { c, x } = cv(T, T);
+  const r = mulberry(seed);
+  const g = x.createRadialGradient(T / 2, T / 2, 1, T / 2, T / 2, T / 2 + 1);
+  g.addColorStop(0, 'rgba(157,99,255,0.60)');
+  g.addColorStop(0.55, 'rgba(95,45,165,0.38)');
+  g.addColorStop(1, 'rgba(30,16,60,0)');
+  x.fillStyle = g; x.fillRect(0, 0, T, T);
+  for (let i = 0; i < 6; i++) set(x, Math.floor(r() * T), Math.floor(r() * T), i % 2 ? '#ecdcff' : '#c6a3ff');
+  return c;
+}
+
 // ---------------------------------------------------------------------------
 export function generateTileArt(scene: Phaser.Scene): void {
   for (let i = 0; i < 3; i++) register(scene, `grass${i}`, grassTile(101 + i * 7));
   register(scene, 'tallgrass_ov', tallGrassOverlay(55));
   register(scene, 'flower_ov', flowerOverlay(71));
+  register(scene, 'rift_ov', riftOverlay(563));
   registerTerrain(scene, 'path', terrainQuarters(dirtFillPixel, DIRT_RIM, 201));
   registerTerrain(scene, 'water', terrainQuarters(waterFillPixel, WATER_RIM, 311));
   for (let i = 0; i < 3; i++) register(scene, `shimmer${i}`, shimmerFrame(i));

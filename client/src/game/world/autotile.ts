@@ -44,7 +44,7 @@ export function bakeTerrain(scene: Phaser.Scene, world: WorldMap): Phaser.GameOb
     for (let x = 0; x < world.width; x++) {
       const t = world.tiles[y][x].type;
       let base: string;
-      if (t === 'floor') base = `floor${(x * 3 + y * 5) % 3}`;
+      if (t === 'floor' || t === 'rift') base = `floor${(x * 3 + y * 5) % 3}`;
       else if (t === 'carpet') base = 'carpet0';
       else if (t === 'wall') base = (y + 1 < world.height && world.tiles[y + 1][x].type !== 'wall') ? 'wall_base' : 'wall0';
       else base = grassKey(x, y);
@@ -57,6 +57,7 @@ export function bakeTerrain(scene: Phaser.Scene, world: WorldMap): Phaser.GameOb
     for (let x = 0; x < world.width; x++) {
       const type = world.tiles[y][x].type;
       if (type === 'tallgrass') rt.batchDraw('tallgrass_ov', x * T, y * T);
+      else if (type === 'rift') rt.batchDraw('rift_ov', x * T, y * T);
       else if (type === 'flower') rt.batchDraw('flower_ov', x * T, y * T);
       else if (AUTOTILE.has(type)) {
         for (const corner of ['tl', 'tr', 'bl', 'br'] as Corner[]) {

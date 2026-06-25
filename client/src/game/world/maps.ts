@@ -6,7 +6,7 @@ export const TILE = 16;
 
 import type { Direction } from '@aether/shared';
 
-export type TerrainType = 'grass' | 'tallgrass' | 'path' | 'water' | 'flower' | 'floor' | 'wall' | 'carpet';
+export type TerrainType = 'grass' | 'tallgrass' | 'path' | 'water' | 'flower' | 'floor' | 'wall' | 'carpet' | 'rift';
 export interface Tile {
   type: TerrainType;
   zone?: string;
@@ -489,8 +489,8 @@ function buildAetherLeague(): WorldMap {
   for (let x = 0; x < W; x++) { set(x, 0, 'wall'); set(x, H - 1, 'wall'); solid[0][x] = solid[H - 1][x] = true; }
   for (let y = 0; y < H; y++) { set(0, y, 'wall'); set(W - 1, y, 'wall'); solid[y][0] = solid[y][W - 1] = true; }
   for (let y = 2; y <= H - 2; y++) set(12, y, 'carpet'); // grand aisle to the throne
-  // an aether-touched rift corner — the League's ultra-rare elites manifest in the growth here
-  for (let yy = 2; yy <= 4; yy++) for (let xx = 2; xx <= 4; xx++) set(xx, yy, 'tallgrass', 'aetherleague');
+  // an aether-touched rift corner — the League's ultra-rare elites manifest from the void here
+  for (let yy = 2; yy <= 4; yy++) for (let xx = 2; xx <= 4; xx++) set(xx, yy, 'rift', 'aetherleague');
 
   const objects: WorldObject[] = [];
   const obj = (kind: ObjKind, x: number, y: number) => {

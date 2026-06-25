@@ -538,10 +538,10 @@ export class OverworldScene extends Phaser.Scene {
     }
 
     const tile: Tile = this.world.tiles[this.ty][this.tx];
-    if (tile.type === 'tallgrass') {
-      // Rustle so you can feel you're in encounter grass.
+    if (tile.type === 'tallgrass' || tile.type === 'rift') {
+      // Rustle/shimmer so you can feel you're in an encounter patch.
       const r = this.add
-        .image(this.tx * TILE + TILE / 2, this.ty * TILE, 'tallgrass_ov')
+        .image(this.tx * TILE + TILE / 2, this.ty * TILE, tile.type === 'rift' ? 'rift_ov' : 'tallgrass_ov')
         .setOrigin(0, 0)
         .setDepth(this.ty * TILE + TILE + 1)
         .setAlpha(0.9);
