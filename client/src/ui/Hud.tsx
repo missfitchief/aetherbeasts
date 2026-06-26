@@ -25,6 +25,7 @@ export function Hud() {
   const profile = useNet((s) => s.profile);
   const balance = useNet((s) => s.balance);
   const exchangeEnabled = useNet((s) => s.exchangeEnabled);
+  const chipsEnabled = useNet((s) => s.chipsEnabled);
   const online = useNet((s) => s.status === 'online');
   const setArena = useNet((s) => s.setArena);
   const [, setTick] = useState(0);
@@ -46,10 +47,10 @@ export function Hud() {
     <div className="hud">
       <div className="pill">{inside ? '🚪 Indoors' : `🧭 ${inForest ? 'Whisperwood Route' : 'Aether Town'}`}</div>
       {inside && <div className="pill esc-hint">⎋ Press ESC to leave</div>}
-      <div className="pill">◈ {save.aether.toLocaleString()} GLINT</div>
-      {exchangeEnabled && profile && <div className="pill" title="LUMEN — the cashable token; trade for $AETHER at the Exchange">◆ {profile.lumen.toLocaleString()} LUMEN</div>}
+      <div className="pill" role="button" style={{ cursor: 'pointer' }} title="GLINT — the in-game spend currency (earned freely, not cashable). Tap to open the Shop." onClick={() => openPanel('shop')}>◈ {save.aether.toLocaleString()} GLINT</div>
+      {exchangeEnabled && profile && <div className="pill" role="button" style={{ cursor: 'pointer' }} title="LUMEN — the cashable token. Tap to swap LUMEN → $AETHER at the Aether Exchange." onClick={() => openPanel('exchange')}>◆ {profile.lumen.toLocaleString()} LUMEN ⇄</div>}
       {profile && <div className="pill" title="Battle Credits — staked in PvP, never cashed out">⚔ {profile.credits.toLocaleString()} BC</div>}
-      {balance && <div className="pill" title={`On-chain $AETHER balance (${balance.mode})`}>⛓ {balance.amount.toLocaleString()} {balance.mode === 'sim' ? '$AETHER·sim' : '$AETHER'}</div>}
+      {balance && <div className="pill" role={chipsEnabled ? 'button' : undefined} style={chipsEnabled ? { cursor: 'pointer' } : undefined} title={chipsEnabled ? 'Tap to buy chips with $AETHER or cash chips out.' : `On-chain $AETHER balance (${balance.mode})`} onClick={chipsEnabled ? () => openPanel('chips') : undefined}>⛓ {balance.amount.toLocaleString()} {balance.mode === 'sim' ? '$AETHER·sim' : '$AETHER'}{chipsEnabled ? ' ⇄' : ''}</div>}
       <div className={'pill wild-pill' + (wildReady ? ' ready' : '')} title="A wild beast is roaming the grass when ready; encounter it to reset the timer.">
         {wildReady ? (wildN > 1 ? `🐾 ${wildN} wild beasts roaming!` : '🐾 Wild beast roaming!') : `🐾 Next wild: ${fmtCountdown(wildNext)}`}
       </div>
