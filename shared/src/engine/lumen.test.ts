@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   emissionFactor, tau, poolCreditFromRevenue, redeemQuote, isRedeemEligible,
   TAU_FLOOR, TAU_MAX, REDEEM_MIN_LUMEN, POOL_FUNDING_RATE, rankedWinLumen, RANKED_WIN_LUMEN, wagerPayout,
+  rebateRemainingUsd, dailyRemainingLumen, REDEEM_REBATE_MULTIPLE,
 } from './lumen.js';
 
 describe('emission + tax governors', () => {
@@ -96,6 +97,58 @@ describe('eligibility gate', () => {
     expect(isRedeemEligible(1, 30)).toBe(true);
     expect(isRedeemEligible(0, 30)).toBe(false); // never paid in -> no free extraction
     expect(isRedeemEligible(1, 29)).toBe(false); // wallet too new
+  });
+});
+
+describe('rebate gate — lifetime cash-out value <= k x lifetime pull spend', () => {
+  const base = { aetherPriceUsd: 0.0001, aetherDecimals: 6, rollingRatio: 0, poolBaseUnits: 10n ** 18n };
+
+  it('rebateRemainingUsd = max(0, k*pullUsd - redeemedUsd)', () => {
+    expect(rebateRemainingUsd(1.5, 0, 1)).toBe(1.5);
+    expect(rebateRemainingUsd(1.5, 1.5, 1)).toBe(0);
+    expect(rebateRemainingUsd(1.5, 2, 1)).toBe(0);   // floored at 0, never negative
+    expect(rebateRemainingUsd(10, 3, 2)).toBe(17);   // k=2 → 20 allowance − 3 used
+  });
+
+  it('the default rebate multiple is farm-safe (k <= 1.11 ⇒ farming can never net-profit)', () => {
+    expect(REDEEM_REBATE_MULTIPLE).toBeLessThanOrEqual(1.11);
+  });
+
+  it('caps accepted LUMEN to the remaining rebate allowance ($0.009/LUMEN net at tau floor)', () => {
+    // $0.45 remaining ÷ ($0.01 × 0.9) = 50 LUMEN allowed
+    const q = redeemQuote({ ...base, lumenRequested: 5000, rebateRemainingUsd: 0.45 });
+    expect(q.ok).toBe(true);
+    expect(q.acceptedLumen).toBe(50);
+  });
+
+  it('blocks when the rebate allowance is below the per-tx minimum', () => {
+    // $0.44 ÷ 0.009 = 48.8 → 48 LUMEN < REDEEM_MIN_LUMEN
+    expect(redeemQuote({ ...base, lumenRequested: 5000, rebateRemainingUsd: 0.44 }).reason).toBe('rebate_cap');
+    expect(redeemQuote({ ...base, lumenRequested: 5000, rebateRemainingUsd: 0 }).reason).toBe('rebate_cap');
+  });
+});
+
+describe('per-account daily redeem cap', () => {
+  const base = { aetherPriceUsd: 0.0001, aetherDecimals: 6, rollingRatio: 0, poolBaseUnits: 10n ** 18n };
+
+  it('dailyRemainingLumen = max(0, cap - used); a cap of 0 disables it (Infinity)', () => {
+    expect(dailyRemainingLumen(100, 500)).toBe(400);
+    expect(dailyRemainingLumen(600, 500)).toBe(0);
+    expect(dailyRemainingLumen(0, 0)).toBe(Infinity);
+  });
+
+  it('caps accepted LUMEN to the daily remaining', () => {
+    const q = redeemQuote({ ...base, lumenRequested: 5000, dailyRemainingLumen: 60 });
+    expect(q.ok).toBe(true);
+    expect(q.acceptedLumen).toBe(60);
+  });
+
+  it('blocks when the daily remaining is below the per-tx minimum', () => {
+    expect(redeemQuote({ ...base, lumenRequested: 5000, dailyRemainingLumen: 40 }).reason).toBe('daily_cap');
+  });
+
+  it('no caps supplied ⇒ converts the full requested amount (backward compatible)', () => {
+    expect(redeemQuote({ ...base, lumenRequested: 5000 }).acceptedLumen).toBe(5000);
   });
 });
 

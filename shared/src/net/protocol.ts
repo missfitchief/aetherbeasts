@@ -51,6 +51,7 @@ export interface ExchangeQuote {
   taxRate: number;         // tau
   aether: number;          // $AETHER (UI units) they'd receive
   aetherBaseUnits: string; // exact base units (bigint serialized as string)
+  aetherPriceUsd: number;  // live $ per $AETHER (drives the "1 LUMEN ≈ X $AETHER" rate display)
   redeemable: number;      // LUMEN available to redeem (no hold ⇒ the player's full balance)
   eligible: boolean;       // passed the eligibility gate (prior purchase + wallet age)
 }

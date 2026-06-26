@@ -88,13 +88,20 @@ fake-value tokens, not real money:
 
 | Knob | Default | Meaning |
 |---|---|---|
-| LUMEN peg | $0.01 / LUMEN | reference cash-out value |
-| Pool funding | 30% of pull revenue | the ring-fence that bounds cash-out |
-| Daily / weekly cap | 50 / 250 LUMEN | per-account cash-out limit |
-| Min cash-out | 50 LUMEN / tx | smallest single redeem (== daily cap → no dust, forces real accumulation) |
-| Hold | none (instant) | LUMEN is redeemable the moment it's earned — a hold kills retention in a token game |
-| Eligibility | ≥1 premium pull + 30-day wallet age | rebate on real spend; gates fresh sybil wallets, not real users |
-| Burn-tax | 10%→60% dynamic | throttles outflow under pool stress |
+| LUMEN peg | $0.01 / LUMEN | reference cash-out value (`LUMEN_PEG_USD`) |
+| Pool funding | 30% of pull revenue | the ring-fence that bounds cash-out (`POOL_FUNDING_RATE`) |
+| Min cash-out | 50 LUMEN / tx | smallest single redeem — no dust, forces real accumulation (`REDEEM_MIN_LUMEN`) |
+| **Rebate cap** | **1.0× lifetime pull USD** | lifetime cash-out VALUE ≤ k × what you spent on pulls. `k ≤ 1.11` ⇒ buy-license-then-drain farming is never net-positive. (`REDEEM_REBATE_MULTIPLE`) |
+| Daily redeem cap | **off** (unlimited) | players convert as much as they hold per day; the rebate cap + pool + tau are the guards. Dormant valve: set `REDEEM_DAILY_CAP_LUMEN` > 0 only if burst-draining ever appears |
+| Hold | none (instant) | LUMEN redeemable when earned — anti-farming is carried by the rebate + daily caps, not a hold |
+| Eligibility | ≥1 premium pull + 30-day wallet age | rebate on real spend; gates fresh sybil wallets (`isRedeemEligible`) |
+| Burn-tax | 10%→60% dynamic | throttles outflow under pool stress (`tau`) |
+| Wager hold | 2 days | redeem hold on LUMEN won in staked PvP (`WAGER_HOLD_DAYS`); only if staked PvP is enabled |
+
+**Upper-bound invariant:** cumulative cash-out ≤ 30% of pull revenue + your seed; the pool never goes
+negative. The seed is a **fully-consumable subsidy, not a protected floor** — early redeemers can drain it
+(then cash-out returns `pool_low` until pull revenue refills). Per-account solvency is enforced by the
+**rebate cap**: no account can ever extract more than `k ×` its own lifetime pull spend.
 
 **Invariant:** cumulative cash-out can never exceed 30% of pull revenue + your seed; the pool can
 never go negative. The economy cannot be drained below what was put in.

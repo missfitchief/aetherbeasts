@@ -31,6 +31,8 @@ export interface PlayerRecord {
   lumenLots: LumenLot[];  // FIFO earn ledger backing the redeem min-hold
   lumenRedeem: { day: string; dayUsed: number; week: string; weekUsed: number };
   premiumPurchases: number; // verified premium-pull count (Exchange eligibility gate)
+  lifetimePullUsd: number;  // cumulative USD spent on premium pulls (rebate-gate numerator)
+  redeemedUsd: number;      // cumulative net USD value cashed out (rebate-gate accumulator)
   lumenGrantKeys: string[]; // idempotency keys for once-per-period LUMEN faucets
   rankedLumen: { date: string; count: number }; // daily ranked-win LUMEN counter
   lumenSeasonTier: number; // highest Season-Point LUMEN milestone granted (monotonic — no re-mint)
@@ -192,6 +194,8 @@ export class Store {
       lumenLots: [],
       lumenRedeem: { day: '', dayUsed: 0, week: '', weekUsed: 0 },
       premiumPurchases: 0,
+      lifetimePullUsd: 0,
+      redeemedUsd: 0,
       lumenGrantKeys: [],
       rankedLumen: { date: '', count: 0 },
       lumenSeasonTier: 0,
@@ -244,6 +248,8 @@ export class Store {
       lumenLots: [],
       lumenRedeem: { day: '', dayUsed: 0, week: '', weekUsed: 0 },
       premiumPurchases: 0,
+      lifetimePullUsd: 0,
+      redeemedUsd: 0,
       lumenGrantKeys: [],
       rankedLumen: { date: '', count: 0 },
       lumenSeasonTier: 0,
@@ -365,6 +371,8 @@ export class Store {
     if (!Array.isArray(rec.lumenLots)) rec.lumenLots = [];
     if (!rec.lumenRedeem) rec.lumenRedeem = { day: '', dayUsed: 0, week: '', weekUsed: 0 };
     if (typeof rec.premiumPurchases !== 'number') rec.premiumPurchases = 0;
+    if (typeof rec.lifetimePullUsd !== 'number') rec.lifetimePullUsd = 0;
+    if (typeof rec.redeemedUsd !== 'number') rec.redeemedUsd = 0;
     if (!Array.isArray(rec.lumenGrantKeys)) rec.lumenGrantKeys = [];
     if (!rec.rankedLumen) rec.rankedLumen = { date: '', count: 0 };
     if (typeof rec.lumenSeasonTier !== 'number') rec.lumenSeasonTier = 0;
@@ -430,7 +438,7 @@ export class Store {
   }
   /** Consume `lumenAccepted` from AGED lots and record the daily/weekly usage. Returns
    *  false if the player lacks that much redeemable (held) LUMEN. */
-  commitRedeem(id: string, lumenAccepted: number, now: number): boolean {
+  commitRedeem(id: string, lumenAccepted: number, now: number, netUsd = 0): boolean {
     const r = this.byId.get(id); if (!r || !(lumenAccepted > 0)) return false; this.ensureLumen(r);
     if (this.redeemableLumen(id, now) + 1e-9 < lumenAccepted) return false;
     this.redeemUsage(id, now); // ensure day/week buckets are current before incrementing
@@ -439,15 +447,24 @@ export class Store {
     r.lumen = Math.max(0, r.lumen - lumenAccepted);
     r.lumenRedeem.dayUsed += lumenAccepted;
     r.lumenRedeem.weekUsed += lumenAccepted;
+    if (netUsd > 0) r.redeemedUsd += netUsd; // count toward the lifetime rebate cap
     this.queuePersist(r);
     return true;
   }
-  recordPremiumPurchase(id: string): void {
+  recordPremiumPurchase(id: string, usd = 0): void {
     const r = this.byId.get(id); if (!r) return; this.ensureLumen(r);
-    r.premiumPurchases += 1; this.queuePersist(r);
+    r.premiumPurchases += 1;
+    if (usd > 0) r.lifetimePullUsd += usd; // grows the rebate allowance (cash-out <= k × this)
+    this.queuePersist(r);
   }
   getPremiumPurchases(id: string): number {
     const r = this.byId.get(id); if (!r) return 0; this.ensureLumen(r); return r.premiumPurchases;
+  }
+  getLifetimePullUsd(id: string): number {
+    const r = this.byId.get(id); if (!r) return 0; this.ensureLumen(r); return r.lifetimePullUsd;
+  }
+  getRedeemedUsd(id: string): number {
+    const r = this.byId.get(id); if (!r) return 0; this.ensureLumen(r); return r.redeemedUsd;
   }
   accountAgeDays(id: string, now: number): number {
     const r = this.byId.get(id); return r ? (now - r.createdAt) / 86_400_000 : 0;
@@ -483,12 +500,13 @@ export class Store {
   }
   /** Refund a failed redemption: re-grant the LUMEN AND roll back the daily/weekly cap
    *  usage that commitRedeem charged, so a failed payout costs the player nothing. */
-  refundRedeem(id: string, amount: number, now: number): void {
+  refundRedeem(id: string, amount: number, now: number, netUsd = 0): void {
     const r = this.byId.get(id); if (!r || !(amount > 0)) return; this.ensureLumen(r);
     this.grantLumen(id, amount, 'redeem_refund');
     this.redeemUsage(id, now); // make sure the day/week buckets are current first
     r.lumenRedeem.dayUsed = Math.max(0, r.lumenRedeem.dayUsed - amount);
     r.lumenRedeem.weekUsed = Math.max(0, r.lumenRedeem.weekUsed - amount);
+    if (netUsd > 0) r.redeemedUsd = Math.max(0, r.redeemedUsd - netUsd); // roll back the rebate accumulator
     this.queuePersist(r);
   }
 

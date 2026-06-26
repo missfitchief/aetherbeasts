@@ -7,12 +7,16 @@
  *    from the high-velocity GLINT grind. Its emission is structurally bounded
  *    (~<=12/day/account) so no amount of botting raises the ceiling.
  *  - The Exchange pays out $AETHER ONLY from a Rewards Pool funded by a fixed cut
- *    of real premium-pull revenue (+ optional disclosed dev seed). HARD INVARIANT:
- *    cumulative_payout <= pool <= POOL_FUNDING_RATE * cumulative_revenue.
- *    => the game can never pay out value players did not first put in. No mint,
- *    no inflation, no fixed redemption promise => it cannot death-spiral.
- *  - A dynamic burn-tax (tau) throttles outflow under stress; daily/weekly caps,
- *    a min-hold, and an eligibility gate (must have paid in) block sybil farming.
+ *    of real premium-pull revenue (+ an optional, disclosed dev seed). UPPER-BOUND
+ *    INVARIANT: 0 <= cumulative_payout <= pool == POOL_FUNDING_RATE * cumulative_revenue
+ *    + dev_seed. The pool is bounded from ABOVE (you can't pay out more than was put
+ *    in) and the runtime floor is pool >= 0 — the dev seed is a fully-consumable
+ *    subsidy, NOT a protected floor (early redeemers can drain it; then 'pool_low').
+ *    No mint, no fixed redemption promise => it cannot death-spiral.
+ *  - PER-ACCOUNT guards stop sybil/faucet farming: an eligibility gate (must have
+ *    bought in), a REBATE cap (lifetime cash-out value <= k × lifetime pull spend;
+ *    k<=1.11 ⇒ farming never net-positive), an OPTIONAL per-day redeem cap (off by
+ *    default), and a dynamic burn-tax (tau) that throttles outflow under pool stress.
  *
  * This module is PURE (no I/O, no clock) so every rule is unit-testable and both
  * client and server agree. All $AETHER amounts are base units (bigint); LUMEN is a
@@ -38,6 +42,32 @@ export const TAU_MAX = 0.60;              // max conversion burn-tax (under pool
 export const TAU_STRESS_FROM = 0.8;       // tau starts rising once rollingRatio passes this
 export const ELIGIBILITY_MIN_PURCHASES = 1;   // must have bought >=1 premium pull to ever cash out
 export const ELIGIBILITY_WALLET_AGE_DAYS = 30; // ...and the wallet must be at least this old
+
+/**
+ * Lifetime cash-out is bounded to k× the account's cumulative premium-pull spend (USD).
+ * Cash-out is a REBATE on real spend, not a faucet you can mint past your purchases.
+ * Farming is net-positive only if k*(1-tau) > 1; at the tau floor (0.10) that is k > 1.111…,
+ * so any k <= 1.11 makes a buy-license-then-drain farm STRICTLY unprofitable. Default 1.0
+ * (you can recoup up to 100% of spend; after burn you net <= 90%). Raise (env) only to add
+ * play-to-earn upside, accepting that k > 1.11 reopens net-positive farming.
+ */
+export const REDEEM_REBATE_MULTIPLE = 1;
+/** Per-account per-UTC-day LUMEN conversion cap. DEFAULT 0 ⇒ NO daily cap: convert as much as you
+ *  hold in a day. Anti-farming is fully carried by the rebate cap (you can't extract more than k× your
+ *  own spend), the pool invariant, and tau — so a daily cap is unnecessary friction. Left as a dormant
+ *  valve (set REDEEM_DAILY_CAP_LUMEN > 0) only if a burst-drain pattern ever appears. */
+export const REDEEM_DAILY_CAP_LUMEN = 0;
+
+/** USD value an account may still cash out under the rebate gate: k×spend − already-redeemed, never < 0. */
+export function rebateRemainingUsd(lifetimePullUsd: number, redeemedUsd: number, k = REDEEM_REBATE_MULTIPLE): number {
+  return Math.max(0, k * lifetimePullUsd - redeemedUsd);
+}
+
+/** LUMEN left in today's per-account cap. A cap of 0 (or unset) means no cap (Infinity). */
+export function dailyRemainingLumen(dailyUsed: number, cap = REDEEM_DAILY_CAP_LUMEN): number {
+  if (!(cap > 0)) return Infinity;
+  return Math.max(0, cap - dailyUsed);
+}
 
 /** LUMEN faucet base rates — earned by PLAYING, not by logging in (Season 1). */
 export const LUMEN_FAUCET = {
@@ -116,11 +146,13 @@ export interface RedeemInput {
   aetherDecimals: number;   // token decimals (e.g. 6)
   rollingRatio: number;     // R, for tau
   poolBaseUnits: bigint;    // current Rewards Pool balance
+  dailyRemainingLumen?: number; // per-account daily cap remaining (default: unbounded)
+  rebateRemainingUsd?: number;  // lifetime rebate allowance remaining, USD (default: unbounded)
 }
 
 export interface RedeemQuote {
   ok: boolean;
-  reason?: 'pool_low' | 'bad_input' | 'min' | 'dust';
+  reason?: 'pool_low' | 'bad_input' | 'min' | 'dust' | 'daily_cap' | 'rebate_cap';
   acceptedLumen: number;    // the LUMEN being converted (no cap; == requested)
   burnedLumen: number;      // tau * accepted (a LUMEN sink)
   netLumen: number;         // accepted - burned (the value actually converted)
@@ -147,11 +179,22 @@ export function redeemQuote(input: RedeemInput): RedeemQuote {
     return { ok: false, reason: 'bad_input', ...empty };
   }
 
-  // No daily/weekly cap: convert as much as you hold. Only the per-tx minimum applies.
-  const accepted = input.lumenRequested;
-  if (accepted < REDEEM_MIN_LUMEN) return { ok: false, reason: 'min', ...empty };
+  if (input.lumenRequested < REDEEM_MIN_LUMEN) return { ok: false, reason: 'min', ...empty };
 
   const t = tau(input.rollingRatio);
+
+  // Per-account gates (both optional; default unbounded). The lifetime rebate allowance is
+  // a USD figure → convert to a LUMEN-input ceiling at the current burn-tax (net value fits).
+  const dailyCap = input.dailyRemainingLumen ?? Infinity;
+  const rebUsd = input.rebateRemainingUsd ?? Infinity;
+  const rebateCap = rebUsd === Infinity ? Infinity
+    : (rebUsd > 0 && t < 1) ? Math.floor(rebUsd / ((1 - t) * LUMEN_PEG_USD) + 1e-9) : 0; // +eps absorbs FP error (0.45/0.009)
+  const accepted = Math.min(input.lumenRequested, dailyCap, rebateCap);
+  if (accepted < REDEEM_MIN_LUMEN) {
+    // Report which per-account ceiling bound it (smaller cap wins the message).
+    return { ok: false, reason: rebateCap <= dailyCap ? 'rebate_cap' : 'daily_cap', ...empty, tau: t };
+  }
+
   const burned = accepted * t;
   const net = accepted - burned;
 
