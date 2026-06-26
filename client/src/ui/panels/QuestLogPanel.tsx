@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import type { QuestViewItem } from '@aether/shared';
 import { useGame } from '../../state/store.js';
 import { useNet } from '../../net/net.js';
-import { claimQuest, refreshQuests } from '../../net/net.js';
+import { claimQuest, claimBounty, refreshQuests } from '../../net/net.js';
 import { Modal } from '../Panels.js';
 
 function fmtResets(ms: number): string {
@@ -54,6 +54,24 @@ export function QuestLogPanel() {
             <div className="quest-section">
               <div className="quest-section-head"><h3>✨ Getting Started</h3><span className="small muted">one-time</span></div>
               {(qv.onboarding ?? []).map((q) => <QuestRow key={q.id} q={q} />)}
+            </div>
+          )}
+
+          {qv.bounty && (
+            <div className="quest-section">
+              <div className="quest-section-head"><h3>🎯 Daily Bounty</h3><span className="small muted">resets in {fmtResets(qv.dailyResetsInMs)}</span></div>
+              <div className={'quest-row' + (qv.bounty.claimed ? ' claimed' : qv.bounty.progress >= qv.bounty.target ? ' ready' : '')}>
+                <div className="quest-info">
+                  <div className="quest-goal">{qv.bounty.goal}</div>
+                  <div className="quest-bar"><div className="quest-bar-fill" style={{ width: Math.min(100, Math.round((qv.bounty.progress / qv.bounty.target) * 100)) + '%' }} /></div>
+                  <div className="quest-meta small muted">{Math.min(qv.bounty.progress, qv.bounty.target)}/{qv.bounty.target} · +{qv.bounty.aether} ◈ · +{qv.bounty.lumen} ◆</div>
+                </div>
+                <div className="quest-action">
+                  {qv.bounty.claimed
+                    ? <span className="quest-check">✓</span>
+                    : <button className="btn small" disabled={qv.bounty.progress < qv.bounty.target} onClick={() => claimBounty()}>Claim</button>}
+                </div>
+              </div>
             </div>
           )}
 

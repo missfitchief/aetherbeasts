@@ -2,12 +2,39 @@ import { describe, it, expect } from 'vitest';
 import {
   freshQuestState, assignDailies, rollOver, applyProgress, claim, toQuestView,
   streakBonus, utcDate, utcWeekStart, questDef, DAILY_POOL, ONBOARDING,
-  claimLoginReward, LOGIN_REWARDS,
+  claimLoginReward, LOGIN_REWARDS, dailyBountyOf, getBounty, claimBounty,
 } from './quests.js';
 
 const DAY = 86_400_000;
 // 2026-06-23 is a Tuesday (week starts Mon 2026-06-22).
 const T_TUE = Date.parse('2026-06-23T10:00:00Z');
+
+describe('daily bounty', () => {
+  it('is deterministic per UTC day and resolves to a real bounty def', () => {
+    expect(dailyBountyOf('2026-06-23').id).toBe(dailyBountyOf('2026-06-23').id);
+    expect(getBounty(dailyBountyOf('2026-06-23').id)).toBeTruthy();
+  });
+
+  it('advances on its event type, then claims its ◈ + LUMEN exactly once', () => {
+    const s = freshQuestState('acct-bnt', T_TUE);
+    const bd = getBounty(s.bounty!.id)!;
+    expect(claimBounty(s)).toBeNull(); // not complete yet
+    applyProgress(s, bd.type, bd.target); // satisfy the bounty in one shot
+    expect(s.bounty!.progress).toBe(bd.target);
+    const r = claimBounty(s);
+    expect(r).toEqual({ aether: bd.aether, lumen: bd.lumen });
+    expect(s.bounty!.claimed).toBe(true);
+    expect(claimBounty(s)).toBeNull(); // never double-claims
+  });
+
+  it('rolls over to a fresh, unclaimed bounty on a new day', () => {
+    const s = freshQuestState('acct-bnt2', T_TUE);
+    s.bounty!.claimed = true;
+    rollOver(s, 'acct-bnt2', T_TUE + DAY);
+    expect(s.bounty!.claimed).toBe(false);
+    expect(s.bounty!.progress).toBe(0);
+  });
+});
 
 describe('daily assignment', () => {
   it('picks 3 dailies, deterministically per account+date', () => {

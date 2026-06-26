@@ -554,6 +554,10 @@ export function emitQuestProgress(type: QuestProgressEvent, amount = 1) {
 export function claimQuest(questId: string) {
   if (socket?.connected) socket.emit('quest:claim', { questId });
 }
+/** Claim today's completed Bounty (◈ + cashable LUMEN). */
+export function claimBounty() {
+  if (socket?.connected) socket.emit('bounty:claim');
+}
 
 // --- expeditions (idle / passive PvE income) --------------------------------
 /** Ask the server for the active expedition run (when opening the panel). */

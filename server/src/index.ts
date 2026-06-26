@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { Server, type Socket } from 'socket.io';
 import type { SaveData, PlayerAction, SummonReport, QuestProgressType, PresenceEnterMsg, PresenceMoveMsg, Creature, WagerCurrency } from '@aether/shared';
-import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, claimLoginReward, addItem, createCreature, toQuestView, poolCreditFromRevenue, LUMEN_FAUCET, redeemQuote, isRedeemEligible, REDEEM_MIN_LUMEN, rebateRemainingUsd, dailyRemainingLumen, LUMEN_PEG_USD } from '@aether/shared';
+import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, claimLoginReward, claimBounty, addItem, createCreature, toQuestView, poolCreditFromRevenue, LUMEN_FAUCET, redeemQuote, isRedeemEligible, REDEEM_MIN_LUMEN, rebateRemainingUsd, dailyRemainingLumen, LUMEN_PEG_USD } from '@aether/shared';
 import { PORT, corsOrigin, TREASURY_ADDRESS, AETHER_MINT, AETHER_DECIMALS, QUOTE_TTL_MS, ONCHAIN_SUMMON_ENABLED, LUMEN_ENABLED, EXCHANGE_ENABLED, STAKED_PVP_ENABLED, validateConfig, summonUsd, REDEEM_REBATE_MULTIPLE, REDEEM_DAILY_CAP_LUMEN } from './config.js';
 import { Store, publicProfile, type PlayerRecord } from './store.js';
 import { buildLoginMessage, verifySignature } from './auth.js';
@@ -267,6 +267,27 @@ function bind(socket: Socket) {
       questId: p.questId, aether: result.aether, points: result.points, streakBonus: result.streakBonus,
       save: rec.save, view: toQuestView(qs, now),
     });
+  });
+
+  // Claim today's Bounty: grant ◈ into the save + the cashable LUMEN faucet (gated).
+  socket.on('bounty:claim', () => {
+    const id = pid();
+    if (!id) return;
+    const rec = store.getById(id);
+    if (!rec || !rec.save) return;
+    const now = Date.now();
+    const qs = store.getQuests(id, now);
+    if (!qs) return;
+    const reward = claimBounty(qs);
+    if (!reward) return; // not complete / already claimed today
+    rec.save.aether = (rec.save.aether ?? 0) + reward.aether;
+    rec.save.updatedAt = Math.max((rec.save.updatedAt ?? 0) + 1, now);
+    store.saveProgress(id, rec.save); // persists save + quests (bounty.claimed) together
+    if (LUMEN_ENABLED && reward.lumen > 0) {
+      store.grantLumen(id, reward.lumen, 'bounty');
+      socket.emit('profile:update', publicProfile(rec));
+    }
+    socket.emit('quest:claimed', { questId: 'bounty', aether: reward.aether, points: 0, streakBonus: 0, save: rec.save, view: toQuestView(qs, now) });
   });
 
   // Claim today's login-calendar reward: grant ◈/items into the save (server-authoritative).

@@ -37,6 +37,8 @@ export interface QuestState {
   loginCalendar: { day: number; lastClaim: string };
   streak: { count: number; lastDay: string };             // lastDay = last UTC date a daily was claimed
   seasonPoints: number;
+  /** Daily rotating Bounty (LUMEN faucet). Rolls over with the daily set. */
+  bounty?: { date: string; id: string; progress: number; claimed: boolean };
 }
 
 // ---- catalog (all numbers tunable here, no code changes elsewhere) ----------
@@ -69,6 +71,27 @@ export const ONBOARDING: QuestDef[] = [
   { id: 'ob_catch_five',   kind: 'onboarding', goal: 'Catch 5 beasts',            type: 'catch',      target: 5,  aether: 200, points: 12 },
   { id: 'ob_win_ten',      kind: 'onboarding', goal: 'Win 10 battles',            type: 'battle_win', target: 10, aether: 350, points: 20 },
 ];
+
+/**
+ * Daily Bounty — a single rotating, higher-stakes objective that pays the
+ * cashable LUMEN faucet (plus some ◈ so it's rewarding pre-launch too). Tracked
+ * off the SAME progress events as dailies, so it needs no new client plumbing.
+ */
+export interface BountyDef { id: string; goal: string; type: QuestProgressType; target: number; aether: number; lumen: number; }
+export const BOUNTY_POOL: BountyDef[] = [
+  { id: 'bnt_wins',   goal: "Bounty: win 6 battles",     type: 'battle_win',  target: 6, aether: 140, lumen: 3 },
+  { id: 'bnt_catch',  goal: 'Bounty: catch 4 beasts',    type: 'catch',       target: 4, aether: 140, lumen: 3 },
+  { id: 'bnt_fight',  goal: 'Bounty: fight 8 battles',   type: 'battle_play', target: 8, aether: 120, lumen: 2 },
+  { id: 'bnt_pvp',    goal: 'Bounty: win 2 PvP matches', type: 'pvp_win',     target: 2, aether: 180, lumen: 4 },
+  { id: 'bnt_evolve', goal: 'Bounty: evolve a beast',    type: 'evolve',      target: 1, aether: 160, lumen: 3 },
+];
+export const getBounty = (id: string): BountyDef | undefined => BOUNTY_POOL.find((b) => b.id === id);
+/** Today's Bounty, deterministic from the UTC date (same for everyone that day). */
+export function dailyBountyOf(dateStr: string): BountyDef {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < dateStr.length; i++) { h ^= dateStr.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  return BOUNTY_POOL[h % BOUNTY_POOL.length];
+}
 
 /** 7-day login reward cycle (index 0 = day 1). Mostly MONSTERS; Day 7 is a rare one. */
 export interface LoginReward { aether?: number; itemId?: string; qty?: number; speciesId?: string; level?: number; label: string; }
@@ -139,6 +162,7 @@ export function assignDailies(accountId: string, date: string): QuestProgress[] 
 
 const freshWeekly = (): QuestProgress[] => WEEKLY.map((q) => ({ id: q.id, progress: 0, claimed: false }));
 const freshOnboarding = (): QuestProgress[] => ONBOARDING.map((q) => ({ id: q.id, progress: 0, claimed: false }));
+const freshBounty = (date: string) => ({ date, id: dailyBountyOf(date).id, progress: 0, claimed: false });
 
 export function freshQuestState(accountId: string, now: number): QuestState {
   return {
@@ -148,6 +172,7 @@ export function freshQuestState(accountId: string, now: number): QuestState {
     loginCalendar: { day: 0, lastClaim: '' },
     streak: { count: 0, lastDay: '' },
     seasonPoints: 0,
+    bounty: freshBounty(utcDate(now)),
   };
 }
 
@@ -160,6 +185,7 @@ export function rollOver(state: QuestState, accountId: string, now: number): voi
   // Onboarding is one-time: never reset it, but backfill accounts that predate it.
   if (!Array.isArray(state.onboarding)) state.onboarding = freshOnboarding();
   if (!state.loginCalendar) state.loginCalendar = { day: 0, lastClaim: '' };
+  if (!state.bounty || state.bounty.date !== today) state.bounty = freshBounty(today); // new bounty each UTC day
 }
 
 /** Advance every matching, unclaimed quest (daily + weekly) toward its target. */
@@ -177,7 +203,25 @@ export function applyProgress(state: QuestState, type: QuestProgressType, amount
   bump(state.daily.quests, DAILY_POOL);
   bump(state.weekly.quests, WEEKLY);
   if (Array.isArray(state.onboarding)) bump(state.onboarding, ONBOARDING);
+  // Advance today's Bounty too (single objective, same event stream).
+  if (state.bounty && !state.bounty.claimed) {
+    const bd = getBounty(state.bounty.id);
+    if (bd && bd.type === type) {
+      const nv = Math.min(bd.target, state.bounty.progress + amount);
+      if (nv !== state.bounty.progress) { state.bounty.progress = nv; changed = true; }
+    }
+  }
   return changed;
+}
+
+/** Claim the daily Bounty once it's complete. Returns its ◈ + LUMEN reward, or null. */
+export function claimBounty(state: QuestState): { aether: number; lumen: number } | null {
+  const b = state.bounty;
+  if (!b) return null;
+  const bd = getBounty(b.id);
+  if (!bd || b.claimed || b.progress < bd.target) return null;
+  b.claimed = true;
+  return { aether: bd.aether, lumen: bd.lumen };
 }
 
 export interface ClaimResult { aether: number; points: number; streakBonus: number; }
@@ -246,5 +290,9 @@ export function toQuestView(state: QuestState, now: number): QuestView {
     seasonPoints: state.seasonPoints,
     dailyResetsInMs: Math.max(0, nextUtcMidnight(now) - now),
     weeklyResetsInMs: Math.max(0, weeklyResetAt - now),
+    bounty: (() => {
+      const b = state.bounty; const bd = b && getBounty(b.id);
+      return b && bd ? { id: bd.id, goal: bd.goal, target: bd.target, progress: b.progress, claimed: b.claimed, aether: bd.aether, lumen: bd.lumen } : null;
+    })(),
   };
 }

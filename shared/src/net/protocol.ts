@@ -180,6 +180,8 @@ export interface QuestView {
   seasonPoints: number;
   dailyResetsInMs: number;
   weeklyResetsInMs: number;
+  /** Today's rotating Bounty (cashable LUMEN + ◈), or null. */
+  bounty: { id: string; goal: string; target: number; progress: number; claimed: boolean; aether: number; lumen: number } | null;
 }
 
 /** Client-reported progress for PvE actions. Bounded by each quest's target on the
@@ -259,6 +261,8 @@ export interface ClientToServer {
   'quest:progress': (p: { type: QuestProgressEvent; amount?: number }) => void;
   /** Claim a completed quest's reward. */
   'quest:claim': (p: { questId: string }) => void;
+  /** Claim today's completed Bounty (◈ into the save + cashable LUMEN). */
+  'bounty:claim': () => void;
   /** Ask the server for the current quest board (e.g. when opening the panel). */
   'quest:request': () => void;
   /** Idle expeditions: fetch the active run, start a tier, or claim a finished run. */
