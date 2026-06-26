@@ -34,7 +34,7 @@ export function newSave(playerId: string, playerName: string): SaveData {
     box: Array.from({ length: BOX_TOTAL }, () => null),
     dex: emptyDex(),
     bag: [
-      { itemId: 'pactstone', qty: 5 },
+      { itemId: 'pactstone', qty: 10 },
       { itemId: 'potion', qty: 3 },
     ],
     position: { ...SPAWN },

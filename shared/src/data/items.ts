@@ -19,12 +19,12 @@ const RAW: ItemData[] = [
     desc: 'Fully restores HP. Uses nanomachines to target damaged tissue first.',
   },
   {
-    id: 'pactstone', name: 'Pact Stone', category: 'catch', price: 200,
+    id: 'pactstone', name: 'Pact Stone', category: 'catch', price: 60,
     effect: { kind: 'catch', power: 1 },
     desc: 'A magical stone that binds a monster’s soul. Its spell is weak — weaken the monster first.',
   },
   {
-    id: 'polishedstone', name: 'Polished Stone', category: 'catch', price: 1200,
+    id: 'polishedstone', name: 'Polished Stone', category: 'catch', price: 600,
     effect: { kind: 'catch', power: 2 },
     desc: 'A pact stone polished smooth as marble. Its harmonic feel weakens a target’s will to resist.',
   },

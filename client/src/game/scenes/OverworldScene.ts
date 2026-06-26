@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import {
   ENCOUNTER_ZONES, scaledWildLevel, createCreature, weightedPick, defaultRng, getSpecies, SPECIES_ORDER,
-  pendingEvolution, evolve, displayName, wildCount, consumeWild,
+  pendingEvolution, evolve, displayName, wildCount, consumeWild, addItem,
   hasBadge, isTrainerDefeated, markTrainerDefeated, awardBadge, getTrainer,
   dailyBossOf, DAILY_BOSS_REWARD, weeklyRaidOf, WEEKLY_RAID_REWARD, isoWeekKey,
   towerFloorBoss, towerFloorReward, seededRng,
@@ -738,7 +738,13 @@ export class OverworldScene extends Phaser.Scene {
     } else if (result.outcome === 'win') {
       const reward = 6 + wild.level * 3; // prize money for the win (tightened so ◈ stays meaningful)
       game.addAether(reward);
-      game.showToast(`Victory!  +${reward} ◈ GLINT`);
+      // A beaten wild sometimes drops a Pact Stone, so your catch supply self-sustains as you play.
+      if (Math.random() < 0.25) {
+        game.mutate((s) => addItem(s, 'pactstone', 1));
+        game.showToast(`Victory!  +${reward} ◈ · Found a Pact Stone! 🔮`);
+      } else {
+        game.showToast(`Victory!  +${reward} ◈ GLINT`);
+      }
     } else if (result.outcome === 'lose') {
       // Whiteout: heal + respawn at the last save point (and PERSIST it, so a
       // reload doesn't drop you back on the faint tile).
