@@ -155,28 +155,32 @@ const RAW: RawSpecies[] = [
   {
     id: 'magmaclaw', name: 'Magmaclaw', types: ['fire'], weights: [356, 12, 6, 13, 24, 18, 8],
     expGroup: 'mid', rarity: 'rare',
-    learn: [[1, 'tackle'], [1, 'unnerve'], [1, 'fireweb'], [15, 'fireball'], [25, 'magictrance']],
+    // Glass cannon — Emberheart turns its Fireball into a comeback nuke at low HP.
+    learn: [[1, 'fireweb'], [1, 'tackle'], [10, 'bite'], [16, 'fireball'], [26, 'magictrance']],
     evo: [],
     desc: "A volcanic salamander whose obsidian hide is veined with living magma. It nests in Emberhollow's deepest vents, where the rock never cools.",
   },
   {
     id: 'cindermaw', name: 'Cindermaw', types: ['normal'], weights: [332, 9, 11, 17, 4, 17, 6],
     expGroup: 'mid', rarity: 'rare',
-    learn: [[1, 'tackle'], [1, 'tailwag'], [14, 'blindingsand'], [19, 'bite'], [27, 'unnerve']],
+    // Snowball bruiser — Diverge stacks Attack, Adaptable boosts its Normal hits.
+    learn: [[1, 'tackle'], [1, 'tailwag'], [12, 'bite'], [18, 'diverge'], [26, 'unnerve']],
     evo: [],
     desc: 'A lumbering golem of cracked stone and smoldering coal. The angrier it gets, the brighter the embers glow between its plates.',
   },
   {
     id: 'voidmanita', name: 'Voidwraith', types: ['ghost'], weights: [368, 17, 10, 12, 15, 12, 14],
     expGroup: 'mid', rarity: 'rare',
-    learn: [[1, 'ectoplasm'], [1, 'unnerve'], [13, 'haunt'], [22, 'magicstar'], [30, 'magictrance']],
+    // Tanky caster — Spectral shrugs off super-effective hits while it chips away.
+    learn: [[1, 'ectoplasm'], [1, 'unnerve'], [12, 'magicstar'], [18, 'haunt'], [26, 'magictrance']],
     evo: [],
     desc: 'A drifting spirit that leaks in through tears in the sky above the Aether League. Its hollow core glows with captured starlight.',
   },
   {
     id: 'prismleviath', name: 'Prismleviath', types: ['water'], weights: [356, 12, 14, 12, 10, 12, 15],
     expGroup: 'mid', rarity: 'rare',
-    learn: [[1, 'tackle'], [1, 'diverge'], [1, 'boombubble'], [15, 'whirlcutter'], [25, 'bite']],
+    // Setup sweeper — Diverge + Tidecaller make its late-game water hits brutal.
+    learn: [[1, 'boombubble'], [1, 'diverge'], [12, 'whirlcutter'], [18, 'bite'], [26, 'magicstar']],
     evo: [],
     desc: "A serpent of living crystal that coils through the Aether League's light. Its prismatic scales refract every colour of the rift.",
   },
