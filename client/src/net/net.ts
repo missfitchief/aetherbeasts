@@ -572,6 +572,10 @@ export function startExpedition(tier: string) {
 export function claimExpedition() {
   if (socket?.connected) socket.emit('expedition:claim');
 }
+/** Report clearing an Endless-Tower floor (server grants daily-capped LUMEN). */
+export function towerFloorCleared(floor: number) {
+  if (socket?.connected) socket.emit('tower:floor', { floor });
+}
 
 export function loginClaim() {
   if (socket?.connected) socket.emit('login:claim');

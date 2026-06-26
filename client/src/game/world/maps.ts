@@ -42,7 +42,7 @@ export interface Npc {
   trainerId?: string;
 }
 
-export type InteractKind = 'shrine' | 'sign' | 'restbed' | 'shopcounter' | 'summon' | 'evolve' | 'dailyboss' | 'weeklyraid';
+export type InteractKind = 'shrine' | 'sign' | 'restbed' | 'shopcounter' | 'summon' | 'evolve' | 'dailyboss' | 'weeklyraid' | 'tower';
 export interface Interactable {
   kind: InteractKind;
   x: number;
@@ -510,6 +510,7 @@ function buildAetherLeague(): WorldMap {
   obj('candle', 6, 6); obj('candle', 18, 6); obj('candle', 10, 19); obj('candle', 14, 19);
   obj('shrine', 9, 18); // heal between bouts
   obj('shrine', 15, 18); // the Weekly Raid altar, flanking the spawn opposite the heal
+  obj('shrine', 18, 16); // the Endless Tower portal
 
   const npcs: Npc[] = [
     { id: 'np_e1', kind: 'trainer', x: 8, y: 12, facing: 'right', sheet: 'sheet_guy', trainerId: 'e_league_1' },
@@ -520,6 +521,7 @@ function buildAetherLeague(): WorldMap {
   const interactables: Interactable[] = [
     { kind: 'shrine', x: 9, y: 18 },
     { kind: 'weeklyraid', x: 15, y: 18, text: ['A void-altar pulses with a weekly challenge.'] },
+    { kind: 'tower', x: 18, y: 16, text: ['A spiral portal climbs into the dark.'] },
   ];
   const warps: Warp[] = [{ x: 12, y: 20, toMap: 'world', toX: 22, toY: 3, facing: 'down' }];
 

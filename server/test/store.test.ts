@@ -163,3 +163,13 @@ assert(store.getChips(CH.id) === 1400, 'wager winnings are credited');
 assert(store.getLumen(CH.id) === 0, 'chips never touch the faucet LUMEN balance');
 
 console.log('✅ chip wager balance tests passed');
+
+// --- Endless Tower: LUMEN granted per floor, capped per UTC day -------------
+const TW = store.createWallet('WALLET_TOWER');
+const twNow = Date.now() + 30 * DAY;
+let twDrips = 0;
+for (let i = 0; i < 15; i++) if (store.grantTowerLumen(TW.id, twNow) > 0) twDrips++;
+assert(twDrips === 10, 'tower LUMEN is capped at 10 floors/day');
+assert(store.grantTowerLumen(TW.id, twNow + DAY) > 0, 'the cap resets the next day');
+
+console.log('✅ tower LUMEN cap test passed');

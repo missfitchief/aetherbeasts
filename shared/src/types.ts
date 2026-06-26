@@ -177,6 +177,8 @@ export interface SaveData {
   lastDailyBoss: string;
   /** Week key (Monday UTC, YYYY-MM-DD) the Weekly Raid was last beaten (empty = available). */
   lastWeeklyRaid?: string;
+  /** Endless Tower progress — deepest floor ever cleared (0 = never climbed). */
+  tower?: { bestFloor: number };
   /** Player avatar chosen in the first-login character creator (null until created). */
   appearance: CharacterChoice | null;
   createdAt: number;

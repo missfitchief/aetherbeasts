@@ -4,11 +4,12 @@ import {
   pendingEvolution, evolve, displayName, wildCount, consumeWild,
   hasBadge, isTrainerDefeated, markTrainerDefeated, awardBadge, getTrainer,
   dailyBossOf, DAILY_BOSS_REWARD, weeklyRaidOf, WEEKLY_RAID_REWARD, isoWeekKey,
+  towerFloorBoss, towerFloorReward, seededRng,
   type Creature, type Direction, type Trainer,
 } from '@aether/shared';
 import { getMap, TILE, ROUTE_START_Y, OBJ_DEF, type WorldMap, type Tile, type Npc, type Interactable } from '../world/maps.js';
 import { useGame } from '../../state/store.js';
-import { useNet, setPresenceHandler, sendPresenceEnter, sendPresenceMove, sendPresenceStatus, type PresenceEvent } from '../../net/net.js';
+import { useNet, setPresenceHandler, sendPresenceEnter, sendPresenceMove, sendPresenceStatus, towerFloorCleared, type PresenceEvent } from '../../net/net.js';
 import { audio } from '../audio.js';
 import { monSpriteUrl, assetUrl } from '../assets.js';
 import { generateTileArt } from '../world/tileart.js';
@@ -617,6 +618,7 @@ export class OverworldScene extends Phaser.Scene {
       } else if (inter.kind === 'evolve') this.useEvolveChamber(inter);
       else if (inter.kind === 'dailyboss') this.useDailyBoss();
       else if (inter.kind === 'weeklyraid') this.useWeeklyRaid();
+      else if (inter.kind === 'tower') this.useEndlessTower();
       else if (inter.kind === 'sign') useDialogue(inter.text ?? ['It’s a wooden sign.']);
     }
   }
@@ -954,6 +956,67 @@ export class OverworldScene extends Phaser.Scene {
       const map = dest.map ?? 'world';
       save.position = { map, x: dest.x, y: dest.y, facing: 'down' };
       useDialogue(['The Raid Champion overwhelmed you...', 'Your team was restored where you last saved.']);
+      if (map !== this.world.id) this.switchMap(map, dest.x, dest.y, 'down');
+      else { this.tx = dest.x; this.ty = dest.y; this.placePlayer(); this.cameras.main.fadeIn(300); }
+    }
+    game.mutate(() => {});
+    this.updateMusic(true);
+    this.cameras.main.flash(150);
+  }
+
+  // --- Endless Tower: a repeatable HP-carries gauntlet of scaling bosses -------
+  private useEndlessTower(): void {
+    const save = useGame.getState().save!;
+    if (!save.party.length) { useDialogue(['You need a team to brave the Tower.']); return; }
+    const best = save.tower?.bestFloor ?? 0;
+    audio.sfx('sfx_ok', 0.4);
+    useDialogue(
+      [
+        'The Endless Tower spirals up into the dark.',
+        best > 0
+          ? `Your deepest climb: Floor ${best}. HP carries between floors — heal up, then climb as deep as you dare!`
+          : 'Your HP carries between floors — there is no healing inside. How deep can you go?',
+      ],
+      () => this.startTowerFloor(1),
+    );
+  }
+
+  private startTowerFloor(floor: number): void {
+    const boss = towerFloorBoss(floor, seededRng((Date.now() ^ (floor * 2654435761)) >>> 0));
+    this.busy = true;
+    useGame.getState().mutate((s) => { (s.dex[boss.speciesId] ??= { seen: false, caught: false }).seen = true; });
+    this.cameras.main.flash(220, 170, 150, 255);
+    this.time.delayedCall(260, () => {
+      this.game.events.once('battle:end', (r: BattleResult) => this.onTowerFloorEnd(r, floor));
+      this.scene.launch('Battle', { wild: boss, isWild: false });
+      this.scene.pause();
+    });
+  }
+
+  private onTowerFloorEnd(result: BattleResult, floor: number): void {
+    this.scene.stop('Battle');
+    this.scene.resume();
+    this.busy = false;
+    this.input.keyboard!.resetKeys();
+    const game = useGame.getState();
+    if (result.outcome === 'win') {
+      const reward = towerFloorReward(floor);
+      game.addAether(reward.glint);
+      game.mutate((s) => { s.tower = { bestFloor: Math.max(s.tower?.bestFloor ?? 0, floor) }; });
+      towerFloorCleared(floor); // server grants daily-capped LUMEN
+      game.persist();
+      const go = window.confirm(
+        `Floor ${floor} cleared!  +${reward.glint} ◈ banked.\n\nClimb to Floor ${floor + 1}? Your HP carries over.\n\nOK = keep climbing · Cancel = leave with your rewards`,
+      );
+      if (go) { this.startTowerFloor(floor + 1); return; }
+      game.showToast(`Left the Tower at Floor ${floor}. Deepest climb: ${game.save?.tower?.bestFloor ?? floor}.`);
+    } else {
+      game.heal();
+      const save = game.save!;
+      const dest = save.lastHeal;
+      const map = dest.map ?? 'world';
+      save.position = { map, x: dest.x, y: dest.y, facing: 'down' };
+      useDialogue([`The Tower bested you on Floor ${floor}.`, 'Your team was restored — and the rewards you banked are yours to keep.']);
       if (map !== this.world.id) this.switchMap(map, dest.x, dest.y, 'down');
       else { this.tx = dest.x; this.ty = dest.y; this.placePlayer(); this.cameras.main.fadeIn(300); }
     }

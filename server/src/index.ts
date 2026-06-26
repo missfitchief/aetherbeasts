@@ -315,6 +315,14 @@ function bind(socket: Socket) {
     socket.emit('login:claimed', { day: res.day, reward: res.reward, creature: granted, view: toQuestView(qs, now) });
   });
 
+  // --- Endless Tower: daily-capped LUMEN per cleared floor (GLINT is client-side) ---
+  socket.on('tower:floor', (_p: { floor?: number }) => {
+    const id = pid();
+    if (!id || !LUMEN_ENABLED) return;
+    const got = store.grantTowerLumen(id, Date.now());
+    if (got > 0) { const rec = store.getById(id); if (rec) socket.emit('profile:update', publicProfile(rec)); }
+  });
+
   // --- Expeditions: idle / passive PvE income (server-authoritative timer) -----
   socket.on('expedition:get', () => {
     const id = pid();

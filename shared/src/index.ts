@@ -14,6 +14,7 @@ export { ABILITY_INFO, abilityInfo, applyAbilityDamage, TYPE_ABILITY, abilityFor
 export { HELD_ITEMS, isHeldItem, heldItemDesc, applyHeldItemDamage } from './data/held.js';
 export { ENCOUNTER_ZONES, scaledWildLevel, dailyBossOf, DAILY_BOSS_REWARD, weeklyRaidOf, WEEKLY_RAID_REWARD, isoWeekKey } from './data/encounters.js';
 export { EXPEDITIONS, getExpedition, expeditionMs, expeditionReward, type ExpeditionTier } from './data/expeditions.js';
+export { towerFloorLevel, towerFloorReward, towerFloorBoss, TOWER_LUMEN_PER_FLOOR, TOWER_LUMEN_DAILY_FLOORS } from './data/tower.js';
 export { TRAINERS, getTrainer, trainersForZone, type Trainer, type TrainerMon } from './data/trainers.js';
 
 // Engine

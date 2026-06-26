@@ -269,4 +269,6 @@ export interface ClientToServer {
   'expedition:get': () => void;
   'expedition:start': (p: { tier: string }) => void;
   'expedition:claim': () => void;
+  /** Endless Tower: report clearing a floor (server grants daily-capped LUMEN). */
+  'tower:floor': (p: { floor: number }) => void;
 }

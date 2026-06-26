@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import type { SaveData, PublicProfile, QuestState, ExpeditionRun } from '@aether/shared';
-import { STARTING_CREDITS, freshQuestState, rollOver, MIN_HOLD_DAYS, LUMEN_FAUCET, rankedWinLumen, LUMEN_MILESTONES, getExpedition, expeditionMs, expeditionReward, chipsForUsd } from '@aether/shared';
+import { STARTING_CREDITS, freshQuestState, rollOver, MIN_HOLD_DAYS, LUMEN_FAUCET, rankedWinLumen, LUMEN_MILESTONES, getExpedition, expeditionMs, expeditionReward, chipsForUsd, TOWER_LUMEN_PER_FLOOR, TOWER_LUMEN_DAILY_FLOORS } from '@aether/shared';
 import { DATABASE_URL, REWARDS_POOL_SEED_BASE, LUMEN_ENABLED } from './config.js';
 
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // resume tokens expire after 30 days (sliding)
@@ -38,6 +38,7 @@ export interface PlayerRecord {
   lumenSeasonTier: number; // highest Season-Point LUMEN milestone granted (monotonic — no re-mint)
   expedition: ExpeditionRun | null; // active idle expedition (passive PvE income), or none
   chips: number; // bought-in casino chips ($AETHER-backed); SEPARATE from the faucet `lumen`
+  towerLumen?: { date: string; count: number }; // daily Endless-Tower LUMEN floor counter (anti-farm cap)
   createdAt: number;
   updatedAt: number;
 }
@@ -434,6 +435,18 @@ export class Store {
     if (amount <= 0) return 0;
     this.addChips(id, amount);
     return amount;
+  }
+
+  /** Grant LUMEN for clearing an Endless-Tower floor, capped to N floors/UTC-day
+   *  (the floor is client-asserted, so the daily cap bounds any spoofing). */
+  grantTowerLumen(id: string, now: number): number {
+    const r = this.byId.get(id); if (!r) return 0; this.ensureLumen(r);
+    const day = new Date(now).toISOString().slice(0, 10);
+    if (!r.towerLumen || r.towerLumen.date !== day) r.towerLumen = { date: day, count: 0 };
+    if (r.towerLumen.count >= TOWER_LUMEN_DAILY_FLOORS) return 0;
+    r.towerLumen.count += 1;
+    this.grantLumen(id, TOWER_LUMEN_PER_FLOOR, 'tower');
+    return TOWER_LUMEN_PER_FLOOR;
   }
 
   // --- LUMEN: the cashable token (server-authoritative, like `credits`) -------
