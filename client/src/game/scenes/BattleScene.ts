@@ -104,8 +104,10 @@ export class BattleScene extends Phaser.Scene {
   private buildSprites(): void {
     const enemy = this.state.enemy.creature;
     const player = this.state.player.creature;
-    this.enemySprite = this.add.image(W + 90, ENEMY_Y, `mon_${enemy.speciesId}`).setScale(0.74);
-    this.playerSprite = this.add.image(-90, PLAYER_Y, `mon_${player.speciesId}`).setScale(0.86).setFlipX(true);
+    // Sprites face RIGHT by default → the enemy (on the right) flips to face the
+    // player; the player's beast (on the left) stays unflipped to face the enemy.
+    this.enemySprite = this.add.image(W + 90, ENEMY_Y, `mon_${enemy.speciesId}`).setScale(0.74).setFlipX(true);
+    this.playerSprite = this.add.image(-90, PLAYER_Y, `mon_${player.speciesId}`).setScale(0.86).setFlipX(false);
     if (enemy.shiny) this.enemySprite.setTint(0xfff2a8);
     if (player.shiny) this.playerSprite.setTint(0xfff2a8);
   }
@@ -552,7 +554,7 @@ export class BattleScene extends Phaser.Scene {
       await this.tweenP({ targets: this.playerSprite, alpha: 0.2, scaleX: 0.9, duration: 600, yoyo: true, repeat: 1 });
       const fromName = displayName(c);
       evolve(c, e.into);
-      this.playerSprite.setTexture(`mon_${c.speciesId}`).setScale(0.86).setFlipX(true).setAlpha(1);
+      this.playerSprite.setTexture(`mon_${c.speciesId}`).setScale(0.86).setFlipX(false).setAlpha(1);
       await this.sparkle(this.playerSprite);
       useGame.getState().mutate((s) => {
         (s.dex[e.into] ??= { seen: false, caught: false }).caught = true;
@@ -614,7 +616,7 @@ export class BattleScene extends Phaser.Scene {
 
   private async swapPlayerSprite(): Promise<void> {
     this.lastPct.player = this.state.player.creature.currentHp / statOf(this.state.player.creature, 'mhp');
-    this.playerSprite.setTexture(`mon_${this.state.player.creature.speciesId}`).setAlpha(1).setScale(0.86).setFlipX(true).setY(PLAYER_Y);
+    this.playerSprite.setTexture(`mon_${this.state.player.creature.speciesId}`).setAlpha(1).setScale(0.86).setFlipX(false).setY(PLAYER_Y);
     this.playerHp.redraw(this.lastPct.player);
     this.refreshHpNum();
     this.refreshExp();
@@ -625,7 +627,7 @@ export class BattleScene extends Phaser.Scene {
   private async swapEnemySprite(): Promise<void> {
     const e = this.state.enemy.creature;
     this.lastPct.enemy = e.currentHp / statOf(e, 'mhp');
-    this.enemySprite.setTexture(`mon_${e.speciesId}`).setAlpha(1).setScale(0.74).setPosition(ENEMY_X, ENEMY_Y);
+    this.enemySprite.setTexture(`mon_${e.speciesId}`).setAlpha(1).setScale(0.74).setFlipX(true).setPosition(ENEMY_X, ENEMY_Y);
     if (e.shiny) this.enemySprite.setTint(0xfff2a8); else this.enemySprite.clearTint();
     this.enemyHp.redraw(this.lastPct.enemy);
     const texts = this.enemyPanel.list.filter((o): o is Phaser.GameObjects.Text => o instanceof Phaser.GameObjects.Text);
