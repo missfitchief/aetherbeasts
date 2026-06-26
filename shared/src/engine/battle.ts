@@ -15,6 +15,7 @@ import type { Creature } from '../types.js';
 import { getSpecies } from '../data/species.js';
 import { getMove } from '../data/moves.js';
 import { getItem } from '../data/items.js';
+import { applyAbilityDamage } from '../data/abilities.js';
 import {
   statOf, buffFactor, damageForMove, accuracyHits, catchChance, catchWobbles, expYield,
 } from './formulas.js';
@@ -197,13 +198,26 @@ function resolveMove(state: BattleState, attacker: Side, moveIndex: number, rng:
   let dealt = 0;
   if (move.category !== 'support' || move.fixedDamage) {
     const res = damageForMove(atkSide.creature, defSide.creature, move.id, atkSide.buffs, rng);
-    dealt = res.damage;
+    // Abilities modify the raw damage (attacker boosts + defender mitigation).
+    const ab = applyAbilityDamage({
+      attackerAbility: atkSide.creature.ability,
+      defenderAbility: defSide.creature.ability,
+      moveType: move.type,
+      attackerTypes: getSpecies(atkSide.creature.speciesId).types,
+      effectiveness: res.effectiveness,
+      damage: res.damage,
+      attackerHpRatio: atkSide.creature.currentHp / maxHpOf(atkSide.creature),
+      defenderHp: defSide.creature.currentHp,
+      defenderMaxHp: maxHpOf(defSide.creature),
+    });
+    dealt = ab.damage;
     defSide.creature.currentHp = Math.max(0, defSide.creature.currentHp - dealt);
     out.push({
       type: 'damage', side: attacker === 'player' ? 'enemy' : 'player',
       amount: dealt, effectiveness: res.effectiveness, crit: res.crit,
       hpAfter: defSide.creature.currentHp, maxHp: maxHpOf(defSide.creature),
     });
+    if (ab.note) out.push({ type: 'message', text: ab.note });
     if (res.crit) out.push({ type: 'message', text: 'A critical hit!' });
     if (res.effectiveness > 1) out.push({ type: 'message', text: "It's super effective!" });
     else if (res.effectiveness > 0 && res.effectiveness < 1) out.push({ type: 'message', text: "It's not very effective..." });

@@ -10,6 +10,7 @@ export { TYPE_MATCHUP, typeEffectiveness } from './data/typechart.js';
 export { MOVES, getMove } from './data/moves.js';
 export { SPECIES, SPECIES_ORDER, STARTERS, getSpecies } from './data/species.js';
 export { ITEMS, SHOP_STOCK, getItem } from './data/items.js';
+export { ABILITY_INFO, abilityInfo, applyAbilityDamage, type AbilityInfo } from './data/abilities.js';
 export { ENCOUNTER_ZONES, scaledWildLevel, dailyBossOf, DAILY_BOSS_REWARD, weeklyRaidOf, WEEKLY_RAID_REWARD, isoWeekKey } from './data/encounters.js';
 export { EXPEDITIONS, getExpedition, expeditionMs, expeditionReward, type ExpeditionTier } from './data/expeditions.js';
 export { TRAINERS, getTrainer, trainersForZone, type Trainer, type TrainerMon } from './data/trainers.js';

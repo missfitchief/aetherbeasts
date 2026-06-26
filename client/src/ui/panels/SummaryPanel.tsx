@@ -1,6 +1,6 @@
 import {
   getSpecies, getMove, displayName, allStats, expProgress,
-  ivTotalPercent, CORE_STATS, STAT_TLA, TYPE_COLOR, dupesFor, MAX_STARS, type Creature,
+  ivTotalPercent, CORE_STATS, STAT_TLA, TYPE_COLOR, dupesFor, MAX_STARS, abilityInfo, type Creature,
 } from '@aether/shared';
 import { useGame } from '../../state/store.js';
 import { Modal } from '../Panels.js';
@@ -45,7 +45,8 @@ export function SummaryPanel() {
             {'★'.repeat(stars)}<span style={{ color: '#4a5364' }}>{'★'.repeat(MAX_STARS - stars)}</span>
           </div>
           <div className="muted small" style={{ marginTop: 4 }}>
-            {c.nature} nature · {c.ability}
+            {c.nature} nature · <span style={{ color: '#7cc4ff' }} title={abilityInfo(c.ability).desc}>{c.ability}</span>
+            {abilityInfo(c.ability).desc ? <><br /><span style={{ color: '#8fb3d9', fontSize: 11 }}>{abilityInfo(c.ability).desc}</span></> : null}
             <br />
             IV potential {ivTotalPercent(c)}%{c.shiny ? ' · ✨ Shiny' : ''}
             {stars > 0 ? <><br />Awakened +{stars * 8}% stats</> : null}
