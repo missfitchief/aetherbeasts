@@ -11,6 +11,7 @@ import type {
   AuthOk,
   SaveData,
   AetherSummonQuote,
+  ChipQuote,
   SummonReport,
   QuestView,
   QuestProgressEvent,
@@ -74,6 +75,10 @@ interface NetState {
   exchangeEnabled: boolean;
   /** Staked-PvP LUMEN wagers — open only when the server enables them. */
   stakedPvpEnabled: boolean;
+  /** Buy-in/cash-out chip casino — open only when the server enables it. */
+  chipsEnabled: boolean;
+  /** A chip buy-in or cash-out is in flight (disables the buttons). */
+  chipBusy: boolean;
   exchangeQuote: ExchangeQuote | null;
   exchangeBusy: boolean;
   /** Active idle expedition (passive PvE income), or null when none is running. */
@@ -108,6 +113,8 @@ export const useNet = create<NetState>((set) => ({
   questView: null,
   exchangeEnabled: false,
   stakedPvpEnabled: false,
+  chipsEnabled: false,
+  chipBusy: false,
   exchangeQuote: null,
   exchangeBusy: false,
   expedition: null,
@@ -251,7 +258,7 @@ function wire(s: Socket) {
 
   s.on('auth:ok', (p: AuthOk) => {
     localStorage.setItem(TOKEN_KEY, p.token);
-    useNet.setState({ status: 'online', socketReady: true, authFailed: false, profile: p.profile, wallet: p.profile.wallet, onchainSummon: p.onchainSummon, exchangeEnabled: p.exchangeEnabled, stakedPvpEnabled: p.stakedPvpEnabled });
+    useNet.setState({ status: 'online', socketReady: true, authFailed: false, profile: p.profile, wallet: p.profile.wallet, onchainSummon: p.onchainSummon, exchangeEnabled: p.exchangeEnabled, stakedPvpEnabled: p.stakedPvpEnabled, chipsEnabled: p.chipsEnabled });
 
     // Re-register live-overworld presence on every (re)connect: the initial enter can be dropped
     // if the scene mounts before the socket is up, and a reconnect needs us to re-join the map room.
@@ -370,6 +377,28 @@ function wire(s: Socket) {
 
   s.on('opponent:left', (p: { message: string }) => useNet.setState({ note: p.message }));
   s.on('error', (p: { message: string }) => toast(p.message));
+
+  // Wager chips: server quoted a buy-in price → pay it → submit the signature.
+  s.on('chips:quote', async (q: ChipQuote) => {
+    try {
+      const { paySummon } = await import('./aetherPay.js'); // generic $AETHER transfer
+      const txSig = await paySummon(q);
+      s.emit('chips:buy', { quoteId: q.quoteId, txSig });
+    } catch (e) {
+      useNet.setState({ chipBusy: false });
+      const msg = e instanceof Error ? e.message : '';
+      toast(/reject|denied|cancel|user/i.test(msg) ? 'Payment cancelled — no $AETHER was spent.' : 'Could not send the payment — no $AETHER was spent.');
+    }
+  });
+  s.on('chips:bought', (p: { chips: number; added: number }) => {
+    useNet.setState({ chipBusy: false });
+    toast(`Bought ${p.added.toLocaleString()} chips — balance ${p.chips.toLocaleString()}.`);
+  });
+  s.on('chips:cashoutResult', (p: { ok: boolean; reason?: string; aether: number }) => {
+    useNet.setState({ chipBusy: false });
+    toast(p.ok ? `Cashed out ${p.aether.toFixed(4)} $AETHER.` : (p.reason ?? 'Cash-out failed.'));
+  });
+  s.on('chips:error', (p: { message: string }) => { useNet.setState({ chipBusy: false }); toast(p.message); });
 
   // Premium ($AETHER) summon: server quoted a price → pay it with Phantom → send
   // the signature back for verification.
@@ -575,6 +604,18 @@ export function claimExpedition() {
 /** Report clearing an Endless-Tower floor (server grants daily-capped LUMEN). */
 export function towerFloorCleared(floor: number) {
   if (socket?.connected) socket.emit('tower:floor', { floor });
+}
+
+// --- wager chips: buy-in ($AETHER -> chips) + cash-out (chips -> $AETHER) ----
+/** Request a buy-in price quote for a USD chip pack (the quote handler pays it). */
+export function buyChips(usd: number) {
+  const s = ensureSocket();
+  if (s.connected) { useNet.setState({ chipBusy: true }); s.emit('chips:buyQuote', { usd }); }
+}
+/** Cash chips out to $AETHER (server pays from the treasury, bounded by balance). */
+export function cashoutChips(chips: number) {
+  const s = ensureSocket();
+  if (s.connected) { useNet.setState({ chipBusy: true }); s.emit('chips:cashout', { chips }); }
 }
 
 export function loginClaim() {

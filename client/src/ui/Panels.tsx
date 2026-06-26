@@ -14,6 +14,7 @@ import { ShareCardPanel } from './panels/ShareCardPanel.js';
 import { FairnessPanel } from './panels/FairnessPanel.js';
 import { ExchangePanel } from './panels/ExchangePanel.js';
 import { ExpeditionPanel } from './panels/ExpeditionPanel.js';
+import { ChipsPanel } from './panels/ChipsPanel.js';
 import { HelpPanel } from './panels/HelpPanel.js';
 
 export function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
@@ -64,6 +65,8 @@ export function Panels() {
       return <ExchangePanel />;
     case 'expedition':
       return <ExpeditionPanel />;
+    case 'chips':
+      return <ChipsPanel />;
     case 'help':
       return <HelpPanel />;
     default:

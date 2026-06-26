@@ -162,6 +162,15 @@ store.addChips(CH.id, 900); // won a 500-stake pot (1000) minus the 10% burned r
 assert(store.getChips(CH.id) === 1400, 'wager winnings are credited');
 assert(store.getLumen(CH.id) === 0, 'chips never touch the faucet LUMEN balance');
 
+// cash-out building blocks: a failed payout refunds the debited chips (no loss)
+const CC = store.createWallet('WALLET_CHIPCASH');
+store.buyChips(CC.id, 5); // 500 chips
+assert(store.spendChips(CC.id, 500) === true, 'cash-out debits the chips first');
+assert(store.getChips(CC.id) === 0, 'chips left the balance');
+store.addChips(CC.id, 500); // simulate a payout failure -> refund
+assert(store.getChips(CC.id) === 500, 'a failed payout refunds the chips exactly');
+assert(store.spendChips(CC.id, 501) === false, 'can never cash out more chips than held (solvency)');
+
 console.log('✅ chip wager balance tests passed');
 
 // --- Endless Tower: LUMEN granted per floor, capped per UTC day -------------

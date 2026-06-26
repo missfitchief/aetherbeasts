@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { getMove, getSpecies, statOf, TYPE_COLOR, rankOf, currentSeason, STAKED_PVP_TIERS, type Creature, type WagerCurrency } from '@aether/shared';
+import { getMove, getSpecies, statOf, TYPE_COLOR, rankOf, currentSeason, STAKED_PVP_TIERS, CHIP_WAGER_TIERS, type Creature, type WagerCurrency } from '@aether/shared';
 import { useNet, findMatch, cancelMatch, submitMove, submitSwitch, forfeitMatch, leaveResult } from '../../net/net.js';
 import { useGame } from '../../state/store.js';
 import { MonImg, HpBar } from '../components.js';
@@ -21,6 +21,7 @@ function Lobby() {
   const stake = useNet((s) => s.stake);
   const currency = useNet((s) => s.currency);
   const stakedPvpEnabled = useNet((s) => s.stakedPvpEnabled);
+  const chipsEnabled = useNet((s) => s.chipsEnabled);
   const setArena = useNet((s) => s.setArena);
   const setStake = useNet((s) => s.setStake);
   const setCurrency = useNet((s) => s.setCurrency);
@@ -29,15 +30,18 @@ function Lobby() {
 
   const credits = profile?.credits ?? 0;
   const lumen = profile?.lumen ?? 0;
+  const chips = profile?.chips ?? 0;
   const rating = profile?.rating ?? 1000;
   const rank = rankOf(rating);
   const season = currentSeason(Date.now());
   const daysLeft = Math.max(1, Math.ceil((season.endsAt - Date.now()) / 86_400_000));
   const isLumen = currency === 'lumen';
-  const tiers = isLumen ? [...STAKED_PVP_TIERS] : [50, 100, 250, 500];
-  const sym = isLumen ? '⬨' : '◈';
-  const balance = isLumen ? lumen : credits;
-  const pickCurrency = (c: WagerCurrency) => { setCurrency(c); setStake(c === 'lumen' ? STAKED_PVP_TIERS[0] : 50); };
+  const isChips = currency === 'chips';
+  const tiers = isLumen ? [...STAKED_PVP_TIERS] : isChips ? [...CHIP_WAGER_TIERS] : [50, 100, 250, 500];
+  const sym = isLumen ? '⬨' : isChips ? '🎰' : '◈';
+  const balance = isLumen ? lumen : isChips ? chips : credits;
+  const firstTier = (c: WagerCurrency) => c === 'lumen' ? STAKED_PVP_TIERS[0] : c === 'chips' ? CHIP_WAGER_TIERS[0] : 50;
+  const pickCurrency = (c: WagerCurrency) => { setCurrency(c); setStake(firstTier(c)); };
   // Closing while searching must also leave the server queue (no ghost entries).
   const close = () => {
     if (lobby === 'queued') cancelMatch();
@@ -70,18 +74,19 @@ function Lobby() {
           </div>
         </div>
 
-        {stakedPvpEnabled && (
+        {(stakedPvpEnabled || chipsEnabled) && (
           <div className="arena-stake">
             <label className="muted small">Wager</label>
             <div className="arena-stake-row">
-              <button className={'stake-chip' + (!isLumen ? ' active' : '')} disabled={lobby === 'queued'} onClick={() => pickCurrency('credits')}>◈ Credits</button>
-              <button className={'stake-chip' + (isLumen ? ' active' : '')} disabled={lobby === 'queued'} onClick={() => pickCurrency('lumen')}>⬨ LUMEN (real $)</button>
+              <button className={'stake-chip' + (currency === 'credits' ? ' active' : '')} disabled={lobby === 'queued'} onClick={() => pickCurrency('credits')}>◈ Credits</button>
+              {stakedPvpEnabled && <button className={'stake-chip' + (isLumen ? ' active' : '')} disabled={lobby === 'queued'} onClick={() => pickCurrency('lumen')}>⬨ LUMEN (real $)</button>}
+              {chipsEnabled && <button className={'stake-chip' + (isChips ? ' active' : '')} disabled={lobby === 'queued'} onClick={() => pickCurrency('chips')}>🎰 Chips (real $)</button>}
             </div>
           </div>
         )}
 
         <div className="arena-stake">
-          <label className="muted small">Stake{isLumen ? ` — you hold ${lumen} ⬨` : ''}</label>
+          <label className="muted small">Stake{isLumen ? ` — you hold ${lumen} ⬨` : isChips ? ` — you hold ${chips} 🎰` : ''}</label>
           <div className="arena-stake-row">
             {tiers.map((t) => (
               <button key={t} className={'stake-chip' + (t === stake ? ' active' : '')} disabled={lobby === 'queued'}
@@ -111,7 +116,9 @@ function Lobby() {
         <div className="arena-foot muted small">
           {isLumen
             ? 'LUMEN wagers are real-money: winnings come from your opponent’s stake (a 10% rake is burned). Withdraw via the Aether Exchange.'
-            : 'Battle Credits are an in-game soft currency — never cashed out or sent on-chain.'}
+            : isChips
+              ? 'Chip wagers are real-money: winnings come from your opponent’s stake (a 10% rake is burned). Buy in + cash out via 🎰 Wager Chips.'
+              : 'Battle Credits are an in-game soft currency — never cashed out or sent on-chain.'}
         </div>
       </div>
     </div>
@@ -203,7 +210,7 @@ function BattleArena() {
       </div>
 
       <div className="pvp-mid">
-        <span className="pvp-stake">Pot: {view.stake * 2} {view.currency === 'lumen' ? '⬨' : '◈'}</span>
+        <span className="pvp-stake">Pot: {view.stake * 2} {view.currency === 'lumen' ? '⬨' : view.currency === 'chips' ? '🎰' : '◈'}</span>
         {banner ? <span key={banner} className="pvp-banner">{banner}</span> : <span />}
         {view.over ? <span className="pvp-turn">Battle over!</span>
           : myTurn ? <span className="pvp-turn you">Your move! <Countdown deadline={deadline} /></span>

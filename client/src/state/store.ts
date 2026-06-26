@@ -9,7 +9,7 @@ import { saveAdapter, getOrCreatePlayerId } from './persistence.js';
 export interface SlotLoc { zone: 'party' | 'box'; index: number }
 
 export type Screen = 'title' | 'starter' | 'playing';
-export type Panel = null | 'menu' | 'party' | 'box' | 'dex' | 'bag' | 'shop' | 'summary' | 'summon' | 'quests' | 'help' | 'login' | 'share' | 'fairness' | 'exchange' | 'expedition';
+export type Panel = null | 'menu' | 'party' | 'box' | 'dex' | 'bag' | 'shop' | 'summary' | 'summon' | 'quests' | 'help' | 'login' | 'share' | 'fairness' | 'exchange' | 'expedition' | 'chips';
 
 export interface DialogueState {
   lines: string[];

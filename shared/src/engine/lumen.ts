@@ -123,6 +123,7 @@ export function wagerPayout(stake: number): { pot: number; rake: number; toWinne
 export const CHIP_PEG_USD = LUMEN_PEG_USD;                          // 1 chip = $0.01
 export const CHIP_WAGER_TIERS = [100, 500, 1000, 5000] as const;    // $1 / $5 / $10 / $50 antes
 export const CHIP_BUY_MIN_USD = 1;                                  // smallest deposit
+export const CHIP_BUY_USD = [1, 5, 10, 50, 100] as const;           // buyable chip packs (USD)
 export const CHIP_CASHOUT_MIN = 100;                                // smallest cash-out (chips) = $1
 export const chipsForUsd = (usd: number): number => (usd > 0 && Number.isFinite(usd) ? Math.round(usd / CHIP_PEG_USD) : 0);
 export const usdForChips = (chips: number): number => (chips > 0 ? chips * CHIP_PEG_USD : 0);

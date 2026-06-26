@@ -11,6 +11,7 @@ export function MenuPanel() {
   const showToast = useGame((s) => s.showToast);
   const save = useGame((s) => s.save);
   const exchangeEnabled = useNet((s) => s.exchangeEnabled);
+  const chipsEnabled = useNet((s) => s.chipsEnabled);
   const wallet = useNet((s) => s.wallet);
   if (!save) return null;
   const dc = dexCounts(save);
@@ -23,6 +24,7 @@ export function MenuPanel() {
     { emoji: '📣', label: 'Share', sub: 'My team', onClick: () => openPanel('share') },
     { emoji: '✦', label: 'Aether Rift', sub: 'Summon', onClick: () => openPanel('summon') },
     ...(exchangeEnabled ? [{ emoji: '◆', label: 'Aether Exchange', sub: 'Cash out LUMEN', onClick: () => openPanel('exchange') }] : []),
+    ...(chipsEnabled ? [{ emoji: '🎰', label: 'Wager Chips', sub: 'Buy in / cash out', onClick: () => openPanel('chips') }] : []),
     { emoji: '🎒', label: 'Bag', onClick: () => openPanel('bag') },
     { emoji: '📖', label: 'Aether-Dex', sub: `${dc.caught}/${dc.total}`, onClick: () => openPanel('dex') },
     { emoji: '🌀', label: 'Spirit Realm', sub: 'Storage', onClick: () => openPanel('box') },

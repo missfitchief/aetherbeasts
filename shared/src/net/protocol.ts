@@ -67,6 +67,20 @@ export interface ExchangeResult {
   aether: number;
 }
 
+/** A short-lived USD-pegged price for a chip buy-in, in $AETHER (mirrors AetherSummonQuote). */
+export interface ChipQuote {
+  quoteId: string;
+  usd: number;              // the USD pack being bought
+  chips: number;            // chips that will be credited on payment
+  aetherAmount: number;     // $AETHER to transfer (display)
+  aetherBaseUnits: string;  // EXACT amount to transfer (integer base units, as a string)
+  treasury: string;
+  mint: string;
+  decimals: number;
+  priceUsd: number;         // $AETHER/USD used
+  expiresAt: number;        // epoch ms
+}
+
 export interface AuthOk {
   token: string;          // resume token (persist client-side)
   profile: PublicProfile;
@@ -75,6 +89,7 @@ export interface AuthOk {
   onchainSummon: boolean; // is the on-chain $AETHER gacha live (mint+treasury set)?
   exchangeEnabled: boolean; // is the LUMEN -> $AETHER Exchange (cash-out) open?
   stakedPvpEnabled: boolean; // are LUMEN PvP wagers open?
+  chipsEnabled: boolean; // is the buy-in/cash-out chip casino open?
 }
 
 // ---- battle views (always rendered from the recipient's perspective) -------
@@ -224,6 +239,11 @@ export interface ServerToClient {
   // Expeditions: the authoritative active-run state, and a claimed run's reward.
   'expedition:state': (p: { active: ExpeditionRun | null }) => void;
   'expedition:claimed': (p: { glint: number; lumen: number; save: SaveData }) => void;
+  // Wager chips: a buy-in price quote, a confirmed purchase, and a cash-out result.
+  'chips:quote': (p: ChipQuote) => void;
+  'chips:bought': (p: { chips: number; added: number }) => void; // new balance + chips added
+  'chips:cashoutResult': (p: { ok: boolean; reason?: string; sig?: string; chips: number; aether: number }) => void;
+  'chips:error': (p: { message: string }) => void;
   'error': (p: { message: string }) => void;
 }
 
@@ -271,4 +291,8 @@ export interface ClientToServer {
   'expedition:claim': () => void;
   /** Endless Tower: report clearing a floor (server grants daily-capped LUMEN). */
   'tower:floor': (p: { floor: number }) => void;
+  /** Wager chips: price a buy-in pack, confirm a paid buy-in, or cash chips out. */
+  'chips:buyQuote': (p: { usd: number }) => void;
+  'chips:buy': (p: { quoteId: string; txSig: string }) => void;
+  'chips:cashout': (p: { chips: number }) => void;
 }

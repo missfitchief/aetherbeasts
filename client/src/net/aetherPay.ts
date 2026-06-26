@@ -4,8 +4,11 @@ import {
   createTransferCheckedInstruction,
   createAssociatedTokenAccountIdempotentInstruction,
 } from '@solana/spl-token';
-import type { AetherSummonQuote } from '@aether/shared';
 import { getConnectedProvider } from './wallet.js';
+
+/** The minimal quote shape an $AETHER transfer needs (satisfied by both the
+ *  premium-summon quote and the chip buy-in quote). */
+export interface AetherPayable { mint: string; treasury: string; aetherBaseUnits: string; decimals: number }
 
 // The token lives on whatever cluster the mint was created on; for a pump.fun
 // launch that's mainnet. A paid RPC (Helius/QuickNode) is strongly recommended
@@ -19,7 +22,7 @@ const RPC_URL = (import.meta.env.VITE_SOLANA_RPC as string) || 'https://api.main
  * once the tx is broadcast we always return the signature, even if confirmation
  * times out, so a landed payment is never thrown away.
  */
-export async function paySummon(quote: AetherSummonQuote): Promise<string> {
+export async function paySummon(quote: AetherPayable): Promise<string> {
   const provider = await getConnectedProvider();
   const ownerStr = provider.publicKey?.toString();
   if (!ownerStr) throw new Error('Wallet not connected.');

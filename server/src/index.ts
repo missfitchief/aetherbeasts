@@ -2,8 +2,8 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { Server, type Socket } from 'socket.io';
 import type { SaveData, PlayerAction, SummonReport, QuestProgressType, PresenceEnterMsg, PresenceMoveMsg, Creature, WagerCurrency } from '@aether/shared';
-import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, claimLoginReward, claimBounty, addItem, createCreature, toQuestView, poolCreditFromRevenue, LUMEN_FAUCET, redeemQuote, isRedeemEligible, REDEEM_MIN_LUMEN, rebateRemainingUsd, dailyRemainingLumen, LUMEN_PEG_USD } from '@aether/shared';
-import { PORT, corsOrigin, TREASURY_ADDRESS, AETHER_MINT, AETHER_DECIMALS, QUOTE_TTL_MS, ONCHAIN_SUMMON_ENABLED, LUMEN_ENABLED, EXCHANGE_ENABLED, STAKED_PVP_ENABLED, validateConfig, summonUsd, REDEEM_REBATE_MULTIPLE, REDEEM_DAILY_CAP_LUMEN } from './config.js';
+import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, claimLoginReward, claimBounty, addItem, createCreature, toQuestView, poolCreditFromRevenue, LUMEN_FAUCET, redeemQuote, isRedeemEligible, REDEEM_MIN_LUMEN, rebateRemainingUsd, dailyRemainingLumen, LUMEN_PEG_USD, CHIP_BUY_USD, CHIP_CASHOUT_MIN, chipsForUsd, usdForChips } from '@aether/shared';
+import { PORT, corsOrigin, TREASURY_ADDRESS, AETHER_MINT, AETHER_DECIMALS, QUOTE_TTL_MS, ONCHAIN_SUMMON_ENABLED, LUMEN_ENABLED, EXCHANGE_ENABLED, STAKED_PVP_ENABLED, CHIPS_ENABLED, validateConfig, summonUsd, REDEEM_REBATE_MULTIPLE, REDEEM_DAILY_CAP_LUMEN } from './config.js';
 import { Store, publicProfile, type PlayerRecord } from './store.js';
 import { buildLoginMessage, verifySignature } from './auth.js';
 import { aetherBalance } from './balance.js';
@@ -33,6 +33,12 @@ const MAX_QUOTES_PER_PLAYER = 5;
 interface GrantRec { playerId: string; report: SummonReport; at: number }
 const grantedSummons = new Map<string, GrantRec>();
 const GRANT_TTL_MS = 30 * 60_000;
+// Wager-chip buy-in quotes + idempotent grant ledger + cash-out concurrency guard.
+interface ChipQuoteRec { playerId: string; usd: number; baseUnits: bigint; expiresAt: number; }
+const chipQuotes = new Map<string, ChipQuoteRec>();
+interface ChipGrantRec { playerId: string; added: number; at: number }
+const grantedChipBuys = new Map<string, ChipGrantRec>();
+const chipCashoutInFlight = new Set<string>(); // serialize chip cash-outs per player (TOCTOU guard)
 
 const httpServer = createServer((req, res) => {
   if (req.url === '/health' || req.url === '/') {
@@ -64,6 +70,7 @@ function authOk(socket: Socket, rec: PlayerRecord) {
     onchainSummon: ONCHAIN_SUMMON_ENABLED,
     exchangeEnabled: EXCHANGE_ENABLED,
     stakedPvpEnabled: STAKED_PVP_ENABLED,
+    chipsEnabled: CHIPS_ENABLED,
   });
   if (!bound.has(socket.id)) {
     bind(socket);
@@ -313,6 +320,91 @@ function bind(socket: Socket) {
     rec.save.updatedAt = Math.max((rec.save.updatedAt ?? 0) + 1, now);
     store.saveProgress(id, rec.save);
     socket.emit('login:claimed', { day: res.day, reward: res.reward, creature: granted, view: toQuestView(qs, now) });
+  });
+
+  // --- Wager CHIPS: buy-in ($AETHER -> chips) + cash-out (chips -> $AETHER) -------
+  // Buy mirrors summon:onchain (quote -> pay -> verified deposit -> mint chips).
+  // Cash-out mirrors exchange:redeem (debit-first -> payout -> refund-on-fail), but
+  // is TREASURY-backed (not pool-capped) since the deposit IS the chip's backing.
+  socket.on('chips:buyQuote', async (p: { usd?: number }) => {
+    const id = pid();
+    if (!id) return;
+    if (!CHIPS_ENABLED) return socket.emit('chips:error', { message: 'Chips are not available yet.' });
+    const rec = store.getById(id);
+    if (!rec?.wallet) return socket.emit('chips:error', { message: 'Link a wallet to buy chips.' });
+    const usd = Number(p?.usd);
+    if (!(CHIP_BUY_USD as readonly number[]).includes(usd)) return socket.emit('chips:error', { message: 'Pick a chip pack.' });
+    // Bound the per-player quote set (drop the oldest) so it can't grow unbounded.
+    const mine = [...chipQuotes.entries()].filter(([, q]) => q.playerId === id);
+    if (mine.length >= MAX_QUOTES_PER_PLAYER) { mine.sort((a, b) => a[1].expiresAt - b[1].expiresAt); chipQuotes.delete(mine[0][0]); }
+    try {
+      const price = await aetherUsdPrice();
+      const aetherWhole = usd / price;
+      const baseUnits = BigInt(Math.ceil(aetherWhole * Math.pow(10, AETHER_DECIMALS))); // pay AT LEAST the USD value
+      const quoteId = randomUUID();
+      const expiresAt = Date.now() + QUOTE_TTL_MS;
+      chipQuotes.set(quoteId, { playerId: id, usd, baseUnits, expiresAt });
+      socket.emit('chips:quote', {
+        quoteId, usd, chips: chipsForUsd(usd),
+        aetherAmount: Number(baseUnits) / Math.pow(10, AETHER_DECIMALS), aetherBaseUnits: baseUnits.toString(),
+        treasury: TREASURY_ADDRESS, mint: AETHER_MINT, decimals: AETHER_DECIMALS, priceUsd: price, expiresAt,
+      });
+    } catch { socket.emit('chips:error', { message: 'Could not price chips — try again.' }); }
+  });
+
+  socket.on('chips:buy', async (p: { quoteId?: string; txSig?: string }) => {
+    const id = pid();
+    if (!id || !p || typeof p.quoteId !== 'string' || typeof p.txSig !== 'string') return;
+    if (!CHIPS_ENABLED) return socket.emit('chips:error', { message: 'Chips are not available yet.' });
+    const rec = store.getById(id);
+    if (!rec?.wallet) return socket.emit('chips:error', { message: 'Link a wallet to buy chips.' });
+    // Idempotent redelivery: a re-submitted (already-granted) payment re-sends the result.
+    const prior = grantedChipBuys.get(p.txSig);
+    if (prior) {
+      if (prior.playerId !== id) return socket.emit('chips:error', { message: 'That payment belongs to another account.' });
+      return socket.emit('chips:bought', { chips: store.getChips(id), added: prior.added });
+    }
+    const quote = chipQuotes.get(p.quoteId);
+    if (!quote || quote.playerId !== id) return socket.emit('chips:error', { message: 'Unknown or expired quote — get a fresh price.' });
+    if (quote.expiresAt < Date.now()) { chipQuotes.delete(p.quoteId); return socket.emit('chips:error', { message: 'Quote expired — get a fresh price.' }); }
+    const check = await verifyAetherPayment(p.txSig, quote.baseUnits, rec.wallet, store);
+    if (!check.ok) {
+      const g2 = grantedChipBuys.get(p.txSig); // race: a concurrent emit may have just granted it
+      if (g2 && g2.playerId === id) return socket.emit('chips:bought', { chips: store.getChips(id), added: g2.added });
+      return socket.emit('chips:error', { message: check.reason ?? 'Payment not verified.' });
+    }
+    chipQuotes.delete(p.quoteId); // single-use
+    const added = store.buyChips(id, quote.usd); // the deposit now backs these chips in the treasury
+    grantedChipBuys.set(p.txSig, { playerId: id, added, at: Date.now() });
+    socket.emit('chips:bought', { chips: store.getChips(id), added });
+    socket.emit('profile:update', publicProfile(rec));
+  });
+
+  socket.on('chips:cashout', async (p: { chips?: number }) => {
+    const id = pid();
+    if (!id || !p) return;
+    const fail = (reason: string) => socket.emit('chips:cashoutResult', { ok: false, reason, chips: store.getChips(id), aether: 0 });
+    if (!CHIPS_ENABLED) return fail('Chips are not available yet.');
+    if (chipCashoutInFlight.has(id)) return fail('A cash-out is already in progress — give it a moment.');
+    chipCashoutInFlight.add(id);
+    try {
+      const rec = store.getById(id);
+      if (!rec?.wallet) return fail('Link a wallet to cash out.');
+      const amount = Math.max(0, Math.floor(Number(p.chips) || 0));
+      if (amount < CHIP_CASHOUT_MIN) return fail(`Cash out at least ${CHIP_CASHOUT_MIN} chips at a time.`);
+      if (store.getChips(id) < amount) return fail('Not enough chips.');
+      const price = await aetherUsdPrice();
+      const baseUnits = BigInt(Math.floor((usdForChips(amount) / price) * Math.pow(10, AETHER_DECIMALS))); // round DOWN, never overpay
+      if (baseUnits <= 0n) return fail('That converts to less than one $AETHER unit — try more.');
+      // Debit chips FIRST (a concurrent cash-out can't double-spend), then pay; refund on payout failure.
+      if (!store.spendChips(id, amount)) return fail('Not enough chips.');
+      const pay = await payoutAether(rec.wallet, baseUnits);
+      if (!pay.ok) { store.addChips(id, amount); return fail(pay.reason ?? 'Payout failed — your chips were refunded.'); }
+      socket.emit('chips:cashoutResult', { ok: true, sig: pay.sig, chips: store.getChips(id), aether: Number(baseUnits) / Math.pow(10, AETHER_DECIMALS) });
+      socket.emit('profile:update', publicProfile(rec));
+    } finally {
+      chipCashoutInFlight.delete(id);
+    }
   });
 
   // --- Endless Tower: daily-capped LUMEN per cleared floor (GLINT is client-side) ---
