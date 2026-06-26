@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGame } from '../../state/store.js';
 import { useNet, quoteExchange, redeemExchange } from '../../net/net.js';
 import { Modal } from '../Panels.js';
-import { REDEEM_MIN_LUMEN } from '@aether/shared';
+import { REDEEM_MIN_LUMEN, LUMEN_PEG_USD } from '@aether/shared';
 
 /** The Aether Exchange: convert the cashable LUMEN token to on-chain $AETHER.
  *  One-way, server-authoritative, paid from a revenue-funded Rewards Pool. */
@@ -16,6 +16,9 @@ export function ExchangePanel() {
 
   const lumen = profile?.lumen ?? 0;
 
+  // Auto-fetch a quote when the panel opens so the live "1 LUMEN ≈ X $AETHER" rate shows without typing.
+  useEffect(() => { if (enabled) quoteExchange(amount); }, [enabled]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <Modal title="◆ The Aether Exchange" onClose={closePanel}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 460 }}>
@@ -25,6 +28,16 @@ export function ExchangePanel() {
           <span className="rift-bal">◆ {lumen.toLocaleString()} LUMEN</span>
           <span className="muted small">Trade LUMEN for on-chain $AETHER. One-way, paid from the community Rewards Pool.</span>
         </div>
+
+        {quote && quote.aetherPriceUsd > 0 && (
+          <div className="small" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', border: '1px solid #2a3550', borderRadius: 8, padding: '8px 10px' }}>
+            <span className="muted">Live rate</span>
+            <span>
+              1 LUMEN ≈ <b style={{ color: '#ffd166' }}>{(LUMEN_PEG_USD / quote.aetherPriceUsd).toLocaleString('en-US', { maximumFractionDigits: 2 })}</b> $AETHER
+              <span className="muted"> · you keep {Math.round((1 - quote.taxRate) * 100)}% after burn</span>
+            </span>
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <label className="small">Convert{' '}

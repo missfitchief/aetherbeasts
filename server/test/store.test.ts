@@ -114,3 +114,20 @@ assert(store.getLumen(RF.id) === 30, 'refund re-grants the LUMEN');
 assert(store.redeemUsage(RF.id, rnow).dailyUsed === 0, 'refund rolls back the cap usage');
 
 console.log('✅ audit-fix tests passed (season counter, atomic refund)');
+
+// --- rebate-gate accounting: pull spend grows the allowance; redeemed value counts against it ---
+const RB = store.createWallet('WALLET_REBATE');
+const rbnow = Date.now() + 10 * DAY;
+assert(store.getLifetimePullUsd(RB.id) === 0, 'new account has no pull spend');
+assert(store.getRedeemedUsd(RB.id) === 0, 'new account has redeemed nothing');
+store.recordPremiumPurchase(RB.id, 1.5);
+store.recordPremiumPurchase(RB.id, 13.5);
+assert(store.getLifetimePullUsd(RB.id) === 15, 'lifetime pull USD accumulates ($1.50 + $13.50)');
+assert(store.getPremiumPurchases(RB.id) === 2, 'purchase count still increments alongside USD');
+store.grantLumen(RB.id, 100, 'test');
+assert(store.commitRedeem(RB.id, 50, rbnow, 0.45) === true, 'commitRedeem records net USD redeemed');
+assert(Math.abs(store.getRedeemedUsd(RB.id) - 0.45) < 1e-9, 'redeemed USD accumulates toward the rebate cap');
+store.refundRedeem(RB.id, 50, rbnow, 0.45);
+assert(store.getRedeemedUsd(RB.id) === 0, 'refund rolls back the redeemed-USD accumulator');
+
+console.log('✅ rebate-gate accounting tests passed');

@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { REDEEM_REBATE_MULTIPLE as REBATE_DEFAULT, REDEEM_DAILY_CAP_LUMEN as DAILY_CAP_DEFAULT } from '@aether/shared';
 
 export const PORT = Number(process.env.PORT || 3001);
 export const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || '*';
@@ -59,7 +60,7 @@ export const STAKED_PVP_ENABLED = process.env.STAKED_PVP_ENABLED === 'true' && L
  *  elapses (still spendable / re-wagerable). Default 0 (no hold). SET > 0 before enabling staked
  *  PvP — otherwise a sybil ring can instantly funnel many feeder accounts' LUMEN into one gated
  *  cash-out wallet (the per-account eligibility gate only binds at cash-out). */
-export const WAGER_HOLD_DAYS = Number(process.env.WAGER_HOLD_DAYS || 0);
+export const WAGER_HOLD_DAYS = Number(process.env.WAGER_HOLD_DAYS ?? 2);
 export const WAGER_HOLD_MS = (Number.isFinite(WAGER_HOLD_DAYS) && WAGER_HOLD_DAYS > 0 ? WAGER_HOLD_DAYS : 0) * 86_400_000;
 export const summonUsd = (count: number): number => (count >= 10 ? SUMMON_USD_10 : SUMMON_USD_1);
 
@@ -74,6 +75,11 @@ export const REWARDS_POOL_SEED_AETHER = Number(process.env.REWARDS_POOL_SEED_AET
 export const PAYOUT_MAX_PER_TX_AETHER = Number(process.env.PAYOUT_MAX_PER_TX_AETHER || 0);
 export const PAYOUT_MAX_PER_DAY_AETHER = Number(process.env.PAYOUT_MAX_PER_DAY_AETHER || 0);
 const toBaseUnits = (ui: number): bigint => (ui > 0 && Number.isFinite(ui) ? BigInt(Math.round(ui * 10 ** AETHER_DECIMALS)) : 0n);
+/** Exchange anti-farming knobs (override at launch). Cash-out is capped per account two ways:
+ *  (1) lifetime cash-out VALUE <= REDEEM_REBATE_MULTIPLE × lifetime pull spend (rebate gate); and
+ *  (2) at most REDEEM_DAILY_CAP_LUMEN converted per UTC day. Defaults mirror @aether/shared. */
+export const REDEEM_REBATE_MULTIPLE = Number(process.env.REDEEM_REBATE_MULTIPLE ?? REBATE_DEFAULT);
+export const REDEEM_DAILY_CAP_LUMEN = Number(process.env.REDEEM_DAILY_CAP_LUMEN ?? DAILY_CAP_DEFAULT);
 export const REWARDS_POOL_SEED_BASE = toBaseUnits(REWARDS_POOL_SEED_AETHER);
 export const PAYOUT_MAX_PER_TX_BASE = toBaseUnits(PAYOUT_MAX_PER_TX_AETHER);
 export const PAYOUT_MAX_PER_DAY_BASE = toBaseUnits(PAYOUT_MAX_PER_DAY_AETHER);

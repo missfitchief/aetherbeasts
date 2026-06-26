@@ -2,8 +2,8 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { Server, type Socket } from 'socket.io';
 import type { SaveData, PlayerAction, SummonReport, QuestProgressType, PresenceEnterMsg, PresenceMoveMsg, Creature, WagerCurrency } from '@aether/shared';
-import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, claimLoginReward, addItem, createCreature, toQuestView, poolCreditFromRevenue, LUMEN_FAUCET, redeemQuote, isRedeemEligible, REDEEM_MIN_LUMEN } from '@aether/shared';
-import { PORT, corsOrigin, TREASURY_ADDRESS, AETHER_MINT, AETHER_DECIMALS, QUOTE_TTL_MS, ONCHAIN_SUMMON_ENABLED, LUMEN_ENABLED, EXCHANGE_ENABLED, STAKED_PVP_ENABLED, validateConfig } from './config.js';
+import { DAILY_CREDIT_FLOOR, summon as engineSummon, seededRng, applyProgress, claim as claimQuest, claimLoginReward, addItem, createCreature, toQuestView, poolCreditFromRevenue, LUMEN_FAUCET, redeemQuote, isRedeemEligible, REDEEM_MIN_LUMEN, rebateRemainingUsd, dailyRemainingLumen, LUMEN_PEG_USD } from '@aether/shared';
+import { PORT, corsOrigin, TREASURY_ADDRESS, AETHER_MINT, AETHER_DECIMALS, QUOTE_TTL_MS, ONCHAIN_SUMMON_ENABLED, LUMEN_ENABLED, EXCHANGE_ENABLED, STAKED_PVP_ENABLED, validateConfig, summonUsd, REDEEM_REBATE_MULTIPLE, REDEEM_DAILY_CAP_LUMEN } from './config.js';
 import { Store, publicProfile, type PlayerRecord } from './store.js';
 import { buildLoginMessage, verifySignature } from './auth.js';
 import { aetherBalance } from './balance.js';
@@ -205,7 +205,7 @@ function bind(socket: Socket) {
     if (check.toTreasuryBaseUnits && check.toTreasuryBaseUnits > 0n) {
       store.addRewardsPool(poolCreditFromRevenue(check.toTreasuryBaseUnits));
     }
-    store.recordPremiumPurchase(id);
+    store.recordPremiumPurchase(id, summonUsd(quote.count)); // grows the account's cash-out rebate allowance
     try {
       const seed = (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0;
       const report = engineSummon(rec.save, quote.bannerId, quote.count, seededRng(seed), { prepaid: true });
@@ -298,13 +298,15 @@ function bind(socket: Socket) {
   const DECIMALS_POW = Math.pow(10, AETHER_DECIMALS);
   const disabledQuote = (reason: string) => ({
     ok: false, reason, requested: 0, acceptedLumen: 0, burnedLumen: 0, netLumen: 0,
-    taxRate: 0, aether: 0, aetherBaseUnits: '0', redeemable: 0, eligible: false,
+    taxRate: 0, aether: 0, aetherBaseUnits: '0', aetherPriceUsd: 0, redeemable: 0, eligible: false,
   });
   // Map a redeemQuote reason code to player-facing copy (used by both quote + redeem).
   const reasonText = (r?: string): string | undefined =>
     r === 'min' ? `Cash out at least ${REDEEM_MIN_LUMEN} LUMEN at a time.`
       : r === 'dust' ? 'That converts to less than one $AETHER unit — try a bit more.'
       : r === 'pool_low' ? 'The Rewards Pool is replenishing — try again later.'
+      : r === 'daily_cap' ? `Daily cash-out limit reached (${REDEEM_DAILY_CAP_LUMEN} LUMEN/day) — try again tomorrow.`
+      : r === 'rebate_cap' ? 'Cash-out is a rebate on your pulls — buy a premium pull to raise your cash-out limit.'
       : r === 'bad_input' ? 'Enter a valid amount.'
       : r || undefined;
 
@@ -329,7 +331,7 @@ function bind(socket: Socket) {
       reason: !eligible ? 'Buy at least one premium pull (and let your wallet age 30 days) to use the Exchange.' : reasonText(q.reason),
       requested, acceptedLumen: q.acceptedLumen, burnedLumen: q.burnedLumen, netLumen: q.netLumen, taxRate: q.tau,
       aether: Number(q.aetherBaseUnits) / DECIMALS_POW, aetherBaseUnits: q.aetherBaseUnits.toString(),
-      redeemable, eligible,
+      aetherPriceUsd: price, redeemable, eligible,
     });
   });
 
@@ -356,18 +358,21 @@ function bind(socket: Socket) {
         lumenRequested: Math.min(requested, redeemable),
         aetherPriceUsd: price, aetherDecimals: AETHER_DECIMALS, rollingRatio: store.rollingRedeemRatio(now),
         poolBaseUnits: store.getRewardsPool(),
+        dailyRemainingLumen: dailyRemainingLumen(store.redeemUsage(id, now).dailyUsed, REDEEM_DAILY_CAP_LUMEN),
+        rebateRemainingUsd: rebateRemainingUsd(store.getLifetimePullUsd(id), store.getRedeemedUsd(id), REDEEM_REBATE_MULTIPLE),
       });
       if (!q.ok) return fail(reasonText(q.reason) ?? 'Nothing redeemable yet.');
       // Reserve (consume LUMEN, then debit the pool) BEFORE paying.
-      if (!store.commitRedeem(id, q.acceptedLumen, now)) return fail('Insufficient redeemable LUMEN.');
+      const netUsd = q.netLumen * LUMEN_PEG_USD; // value charged against the lifetime rebate cap
+      if (!store.commitRedeem(id, q.acceptedLumen, now, netUsd)) return fail('Insufficient redeemable LUMEN.');
       if (!store.debitRewardsPool(q.aetherBaseUnits)) {
-        store.refundRedeem(id, q.acceptedLumen, now); // pool moved under us — undo LUMEN + cap usage
+        store.refundRedeem(id, q.acceptedLumen, now, netUsd); // pool moved under us — undo LUMEN + cap usage
         return fail('The Rewards Pool is replenishing — try again later.');
       }
       const pay = await payoutAether(rec.wallet, q.aetherBaseUnits);
       if (!pay.ok) {
         // Nothing left the treasury — fully undo: LUMEN + cap usage + the pool debit.
-        store.refundRedeem(id, q.acceptedLumen, now);
+        store.refundRedeem(id, q.acceptedLumen, now, netUsd);
         store.addRewardsPool(q.aetherBaseUnits);
         return fail(pay.reason ?? 'Payout failed — your LUMEN was refunded.');
       }
