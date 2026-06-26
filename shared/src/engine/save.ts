@@ -7,7 +7,7 @@ import { createCreature } from './factory.js';
 import { statOf } from './formulas.js';
 import type { RNG } from './rng.js';
 
-export const SAVE_VERSION = 10;
+export const SAVE_VERSION = 11;
 const BOX_TOTAL = BOX_PAGE_SIZE * BOX_PAGES;
 
 /** New players start BROKE — no free summon currency. They catch a team with the starting
@@ -46,6 +46,7 @@ export function newSave(playerId: string, playerName: string): SaveData {
     badges: [],
     defeatedTrainers: [],
     lastDailyBoss: '',
+    lastWeeklyRaid: '',
     appearance: null,
     createdAt: 0,
     updatedAt: 0,
@@ -182,6 +183,7 @@ export function normalizeSave(save: SaveData): SaveData {
   if (!Array.isArray(save.badges)) save.badges = []; // gym/boss badges (v7)
   if (!Array.isArray(save.defeatedTrainers)) save.defeatedTrainers = []; // one-time trainers (v7)
   if (typeof save.lastDailyBoss !== 'string') save.lastDailyBoss = ''; // daily boss (v8)
+  if (typeof save.lastWeeklyRaid !== 'string') save.lastWeeklyRaid = ''; // weekly raid (v11)
   // character creator (v10): appearance is now { base, hue }; clear any legacy value.
   if (!save.appearance || typeof (save.appearance as { base?: unknown }).base !== 'string') save.appearance = null;
   save.version = SAVE_VERSION;

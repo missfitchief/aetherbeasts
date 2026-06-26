@@ -110,3 +110,27 @@ export function dailyBossOf(dateStr: string): { species: string; level: number }
     level: 25 + (h % 15), // 25–39
   };
 }
+
+// ---------------------------------------------------------------------------
+// Weekly Raid Boss — a far tougher endgame champion in the Aether League hall,
+// rotating once per UTC week, beatable once for a big GLINT + LUMEN haul.
+// ---------------------------------------------------------------------------
+const WEEKLY_RAID_POOL = ['voidmanita', 'prismleviath', 'magmaclaw', 'wraithmanita', 'charachne', 'leviocean'];
+export const WEEKLY_RAID_REWARD = 2000; // ◈ for beating this week's raid
+
+/** Monday-of-week UTC key (YYYY-MM-DD) — the once-per-week bucket for the raid. */
+export function isoWeekKey(now: Date): string {
+  const dow = (now.getUTCDay() + 6) % 7; // Mon=0 … Sun=6
+  const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - dow));
+  return monday.toISOString().slice(0, 10);
+}
+
+/** This week's Raid Boss (species + level Lv42–52), deterministic from the week key. */
+export function weeklyRaidOf(weekKey: string): { species: string; level: number } {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < weekKey.length; i++) { h ^= weekKey.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  return {
+    species: WEEKLY_RAID_POOL[h % WEEKLY_RAID_POOL.length],
+    level: 42 + (h % 11), // 42–52
+  };
+}

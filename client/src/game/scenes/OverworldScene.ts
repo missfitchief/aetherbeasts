@@ -3,7 +3,7 @@ import {
   ENCOUNTER_ZONES, scaledWildLevel, createCreature, weightedPick, defaultRng, getSpecies, SPECIES_ORDER,
   pendingEvolution, evolve, displayName, wildCount, consumeWild,
   hasBadge, isTrainerDefeated, markTrainerDefeated, awardBadge, getTrainer,
-  dailyBossOf, DAILY_BOSS_REWARD,
+  dailyBossOf, DAILY_BOSS_REWARD, weeklyRaidOf, WEEKLY_RAID_REWARD, isoWeekKey,
   type Creature, type Direction, type Trainer,
 } from '@aether/shared';
 import { getMap, TILE, ROUTE_START_Y, OBJ_DEF, type WorldMap, type Tile, type Npc, type Interactable } from '../world/maps.js';
@@ -616,6 +616,7 @@ export class OverworldScene extends Phaser.Scene {
         useDialogue(inter.text ?? ['The Aether Rift swirls...'], () => useGame.getState().openPanel('summon'));
       } else if (inter.kind === 'evolve') this.useEvolveChamber(inter);
       else if (inter.kind === 'dailyboss') this.useDailyBoss();
+      else if (inter.kind === 'weeklyraid') this.useWeeklyRaid();
       else if (inter.kind === 'sign') useDialogue(inter.text ?? ['It’s a wooden sign.']);
     }
   }
@@ -893,6 +894,69 @@ export class OverworldScene extends Phaser.Scene {
       else { this.tx = dest.x; this.ty = dest.y; this.placePlayer(); this.cameras.main.fadeIn(300); }
     }
     // 'fled' → no reward; the player may retry today.
+    game.mutate(() => {});
+    this.updateMusic(true);
+    this.cameras.main.flash(150);
+  }
+
+  // --- weekly raid boss (one rotating endgame champion per UTC week) ---------
+  private useWeeklyRaid(): void {
+    const save = useGame.getState().save!;
+    const week = isoWeekKey(new Date());
+    if (save.lastWeeklyRaid === week) {
+      useDialogue(['This week’s Raid Champion has already fallen to you.', 'A new one manifests next week.']);
+      return;
+    }
+    const raid = weeklyRaidOf(week);
+    const partyTop = save.party.length ? Math.max(...save.party.map((c) => c.level)) : 0;
+    if (partyTop < raid.level - 8) {
+      useDialogue([
+        `The void-altar reveals this week’s Raid: a Lv ${raid.level} ${getSpecies(raid.species).name}.`,
+        `It would crush your team (Lv ${partyTop}). Grow stronger and return.`,
+      ]);
+      return;
+    }
+    audio.sfx('sfx_ok', 0.4);
+    useDialogue(
+      ['A monstrous Raid Champion tears through the void!', `Best it for a ${WEEKLY_RAID_REWARD} ◈ haul — once per week.`],
+      () => this.startWeeklyRaid(raid),
+    );
+  }
+
+  private startWeeklyRaid(raid: { species: string; level: number }): void {
+    const beast = createCreature(raid.species, raid.level);
+    this.busy = true;
+    useGame.getState().mutate((s) => { (s.dex[raid.species] ??= { seen: false, caught: false }).seen = true; });
+    this.cameras.main.flash(260, 180, 120, 255);
+    this.time.delayedCall(300, () => {
+      this.game.events.once('battle:end', (r: BattleResult) => this.onWeeklyRaidEnd(r));
+      this.scene.launch('Battle', { wild: beast, isWild: false });
+      this.scene.pause();
+    });
+  }
+
+  private onWeeklyRaidEnd(result: BattleResult): void {
+    this.scene.stop('Battle');
+    this.scene.resume();
+    this.busy = false;
+    this.input.keyboard!.resetKeys();
+    const game = useGame.getState();
+    if (result.outcome === 'win') {
+      const save = game.save!;
+      save.lastWeeklyRaid = isoWeekKey(new Date());
+      game.addAether(WEEKLY_RAID_REWARD);
+      game.persist();
+      game.showToast(`Raid Champion defeated!  +${WEEKLY_RAID_REWARD} ◈ GLINT`);
+    } else if (result.outcome === 'lose') {
+      game.heal();
+      const save = game.save!;
+      const dest = save.lastHeal;
+      const map = dest.map ?? 'world';
+      save.position = { map, x: dest.x, y: dest.y, facing: 'down' };
+      useDialogue(['The Raid Champion overwhelmed you...', 'Your team was restored where you last saved.']);
+      if (map !== this.world.id) this.switchMap(map, dest.x, dest.y, 'down');
+      else { this.tx = dest.x; this.ty = dest.y; this.placePlayer(); this.cameras.main.fadeIn(300); }
+    }
     game.mutate(() => {});
     this.updateMusic(true);
     this.cameras.main.flash(150);

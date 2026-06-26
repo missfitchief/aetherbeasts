@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { scaledWildLevel, ENCOUNTER_ZONES, dailyBossOf } from './encounters.js';
+import { scaledWildLevel, ENCOUNTER_ZONES, dailyBossOf, weeklyRaidOf, isoWeekKey } from './encounters.js';
 import { getSpecies } from './species.js';
 import { seededRng } from '../engine/rng.js';
 import { createCreature } from '../engine/factory.js';
@@ -78,6 +78,24 @@ describe('Daily Boss', () => {
     expect(getSpecies(a.species)).toBeTruthy();
     expect(a.level).toBeGreaterThanOrEqual(25);
     expect(a.level).toBeLessThanOrEqual(39);
+  });
+});
+
+describe('Weekly Raid Boss', () => {
+  it('is deterministic per week with a valid species and tougher level band', () => {
+    const a = weeklyRaidOf('2026-06-22');
+    expect(weeklyRaidOf('2026-06-22')).toEqual(a); // same for everyone in a given week
+    expect(getSpecies(a.species)).toBeTruthy();
+    expect(a.level).toBeGreaterThanOrEqual(42);
+    expect(a.level).toBeLessThanOrEqual(52);
+  });
+
+  it('isoWeekKey buckets a week to its Monday (UTC) and is stable across that week', () => {
+    // 2026-06-22 is a Monday; the whole week resolves to it.
+    expect(isoWeekKey(new Date('2026-06-22T00:00:00Z'))).toBe('2026-06-22');
+    expect(isoWeekKey(new Date('2026-06-25T12:00:00Z'))).toBe('2026-06-22'); // Thu same week
+    expect(isoWeekKey(new Date('2026-06-28T23:59:00Z'))).toBe('2026-06-22'); // Sun same week
+    expect(isoWeekKey(new Date('2026-06-29T00:00:00Z'))).toBe('2026-06-29'); // next Monday
   });
 });
 

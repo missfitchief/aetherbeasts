@@ -290,6 +290,10 @@ export class Store {
     if (boss && boss !== (rec.save?.lastDailyBoss ?? '')) {
       this.grantLumenOnce(rec.id, `boss:${boss}`, LUMEN_FAUCET.dailyBoss, 'daily_boss');
     }
+    const raid = save.lastWeeklyRaid;
+    if (raid && raid !== (rec.save?.lastWeeklyRaid ?? '')) {
+      this.grantLumenOnce(rec.id, `raid:${raid}`, LUMEN_FAUCET.weeklyRaid, 'weekly_raid');
+    }
   }
 
   /**

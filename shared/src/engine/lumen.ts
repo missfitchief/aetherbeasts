@@ -75,6 +75,7 @@ export const LUMEN_FAUCET = {
   weeklyQuestsCleared: 30,  // clear all weeklies
   rankedWinDailyCap: 10,    // at most 10 ranked wins/day earn LUMEN (amount scales with rank — see RANKED_WIN_LUMEN)
   dailyBoss: 2,             // beat the Daily Boss
+  weeklyRaid: 12,           // beat the Weekly Raid Boss (endgame, once/week)
   seasonPointMilestone: 10, // per 500 Season Points, claim-once each
   seasonPointStep: 500,
 } as const;

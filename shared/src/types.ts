@@ -173,6 +173,8 @@ export interface SaveData {
   defeatedTrainers: string[];
   /** UTC date the Daily Boss was last beaten (empty = never / available). */
   lastDailyBoss: string;
+  /** Week key (Monday UTC, YYYY-MM-DD) the Weekly Raid was last beaten (empty = available). */
+  lastWeeklyRaid?: string;
   /** Player avatar chosen in the first-login character creator (null until created). */
   appearance: CharacterChoice | null;
   createdAt: number;

@@ -42,7 +42,7 @@ export interface Npc {
   trainerId?: string;
 }
 
-export type InteractKind = 'shrine' | 'sign' | 'restbed' | 'shopcounter' | 'summon' | 'evolve' | 'dailyboss';
+export type InteractKind = 'shrine' | 'sign' | 'restbed' | 'shopcounter' | 'summon' | 'evolve' | 'dailyboss' | 'weeklyraid';
 export interface Interactable {
   kind: InteractKind;
   x: number;
@@ -509,6 +509,7 @@ function buildAetherLeague(): WorldMap {
   obj('brazier', 8, 3); obj('brazier', 16, 3); obj('brazier', 6, 18); obj('brazier', 18, 18);
   obj('candle', 6, 6); obj('candle', 18, 6); obj('candle', 10, 19); obj('candle', 14, 19);
   obj('shrine', 9, 18); // heal between bouts
+  obj('shrine', 15, 18); // the Weekly Raid altar, flanking the spawn opposite the heal
 
   const npcs: Npc[] = [
     { id: 'np_e1', kind: 'trainer', x: 8, y: 12, facing: 'right', sheet: 'sheet_guy', trainerId: 'e_league_1' },
@@ -516,7 +517,10 @@ function buildAetherLeague(): WorldMap {
     { id: 'np_e3', kind: 'trainer', x: 8, y: 7, facing: 'right', sheet: 'sheet_schoolgirl', trainerId: 'e_league_3' },
     { id: 'np_champ', kind: 'trainer', x: 12, y: 4, facing: 'down', sheet: 'sheet_professor', trainerId: 'boss_champion' },
   ];
-  const interactables: Interactable[] = [{ kind: 'shrine', x: 9, y: 18 }];
+  const interactables: Interactable[] = [
+    { kind: 'shrine', x: 9, y: 18 },
+    { kind: 'weeklyraid', x: 15, y: 18, text: ['A void-altar pulses with a weekly challenge.'] },
+  ];
   const warps: Warp[] = [{ x: 12, y: 20, toMap: 'world', toX: 22, toY: 3, facing: 'down' }];
 
   return {
