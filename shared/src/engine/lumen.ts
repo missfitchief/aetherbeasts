@@ -111,6 +111,22 @@ export function wagerPayout(stake: number): { pot: number; rake: number; toWinne
   return { pot, rake, toWinner: pot - rake };
 }
 
+// ---- Wager CHIPS: a buy-in / cash-out casino balance, SEPARATE from the faucet
+// `lumen`. Chips are bought with $AETHER (1 chip = CHIP_PEG_USD), wagered in PvP
+// (winner takes the pot minus the burned WAGER_RAKE), and cashed out to $AETHER
+// from the treasury that holds the buy-ins. Solvent by construction: chips can
+// only be minted by a real deposit or won from another player's deposited stake,
+// and the burned rake only ever shrinks the outstanding chip liability — so the
+// treasury always holds at least enough $AETHER to cover every chip. The faucet
+// `lumen` is deliberately NOT buyable or chip-wagerable, so earned LUMEN can
+// never be funnelled into a treasury withdrawal (that stays pool-capped).
+export const CHIP_PEG_USD = LUMEN_PEG_USD;                          // 1 chip = $0.01
+export const CHIP_WAGER_TIERS = [100, 500, 1000, 5000] as const;    // $1 / $5 / $10 / $50 antes
+export const CHIP_BUY_MIN_USD = 1;                                  // smallest deposit
+export const CHIP_CASHOUT_MIN = 100;                                // smallest cash-out (chips) = $1
+export const chipsForUsd = (usd: number): number => (usd > 0 && Number.isFinite(usd) ? Math.round(usd / CHIP_PEG_USD) : 0);
+export const usdForChips = (chips: number): number => (chips > 0 ? chips * CHIP_PEG_USD : 0);
+
 /** LUMEN sink prices (give players in-game reasons to SPEND LUMEN, not just cash out). */
 export const LUMEN_SINK = {
   awaken: [8, 20, 50, 120, 280] as const, // cost to awaken to star 1..5 (per beast)

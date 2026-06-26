@@ -38,6 +38,8 @@ export interface PublicProfile {
   losses: number;
   /** Server-authoritative cashable token (LUMEN). 0 until the economy ships. */
   lumen: number;
+  /** Bought-in casino chips ($AETHER-backed wager balance). 0 until chips ship. */
+  chips: number;
 }
 
 /** A LUMEN -> $AETHER cash-out quote from the Aether Exchange (server-computed). */
@@ -94,8 +96,9 @@ export interface PvpBattleView {
   currency: WagerCurrency;
 }
 
-/** What's wagered in a PvP match: Battle Credits (soft) or LUMEN (cashable). */
-export type WagerCurrency = 'credits' | 'lumen';
+/** What's wagered in a PvP match: Battle Credits (soft), LUMEN (cashable faucet),
+ *  or CHIPS (bought-in casino balance). */
+export type WagerCurrency = 'credits' | 'lumen' | 'chips';
 
 export interface MatchFound {
   matchId: string;
@@ -111,6 +114,7 @@ export interface MatchOver {
   potAwarded: number; // amount the recipient gained (0 unless winner)
   credits: number;    // recipient's new Battle Credits balance
   lumen?: number;     // recipient's new LUMEN balance (LUMEN wagers only)
+  chips?: number;     // recipient's new chip balance (chip wagers only)
   rating: number;
   currency: WagerCurrency;
   message: string;

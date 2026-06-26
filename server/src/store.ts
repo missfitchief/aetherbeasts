@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import type { SaveData, PublicProfile, QuestState, ExpeditionRun } from '@aether/shared';
-import { STARTING_CREDITS, freshQuestState, rollOver, MIN_HOLD_DAYS, LUMEN_FAUCET, rankedWinLumen, LUMEN_MILESTONES, getExpedition, expeditionMs, expeditionReward } from '@aether/shared';
+import { STARTING_CREDITS, freshQuestState, rollOver, MIN_HOLD_DAYS, LUMEN_FAUCET, rankedWinLumen, LUMEN_MILESTONES, getExpedition, expeditionMs, expeditionReward, chipsForUsd } from '@aether/shared';
 import { DATABASE_URL, REWARDS_POOL_SEED_BASE, LUMEN_ENABLED } from './config.js';
 
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // resume tokens expire after 30 days (sliding)
@@ -37,6 +37,7 @@ export interface PlayerRecord {
   rankedLumen: { date: string; count: number }; // daily ranked-win LUMEN counter
   lumenSeasonTier: number; // highest Season-Point LUMEN milestone granted (monotonic — no re-mint)
   expedition: ExpeditionRun | null; // active idle expedition (passive PvE income), or none
+  chips: number; // bought-in casino chips ($AETHER-backed); SEPARATE from the faucet `lumen`
   createdAt: number;
   updatedAt: number;
 }
@@ -55,6 +56,7 @@ export function publicProfile(p: PlayerRecord): PublicProfile {
     wins: p.wins,
     losses: p.losses,
     lumen: p.lumen ?? 0,
+    chips: p.chips ?? 0,
   };
 }
 
@@ -201,6 +203,7 @@ export class Store {
       rankedLumen: { date: '', count: 0 },
       lumenSeasonTier: 0,
       expedition: null,
+      chips: 0,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -256,6 +259,7 @@ export class Store {
       rankedLumen: { date: '', count: 0 },
       lumenSeasonTier: 0,
       expedition: null,
+      chips: 0,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -400,6 +404,36 @@ export class Store {
     if (LUMEN_ENABLED && reward.lumen > 0) this.grantLumen(id, reward.lumen, 'expedition');
     this.queuePersist(r);
     return reward;
+  }
+
+  // --- Wager CHIPS: bought-in casino balance ($AETHER-backed, server-only) -----
+  getChips(id: string): number {
+    const r = this.byId.get(id); if (!r) return 0;
+    if (typeof r.chips !== 'number') r.chips = 0;
+    return r.chips;
+  }
+  /** Credit chips (a buy-in deposit, or wager winnings). */
+  addChips(id: string, amount: number): void {
+    const r = this.byId.get(id); if (!r || !(amount > 0)) return;
+    if (typeof r.chips !== 'number') r.chips = 0;
+    r.chips += amount;
+    this.queuePersist(r);
+  }
+  /** Debit chips (a wager ante, or a cash-out). Returns false if underfunded. */
+  spendChips(id: string, amount: number): boolean {
+    const r = this.byId.get(id); if (!r) return false;
+    if (typeof r.chips !== 'number') r.chips = 0;
+    if (!(amount > 0) || r.chips < amount) return false;
+    r.chips -= amount;
+    this.queuePersist(r);
+    return true;
+  }
+  /** Mint chips for a VERIFIED $AETHER deposit (the treasury now holds the backing). */
+  buyChips(id: string, usd: number): number {
+    const amount = chipsForUsd(usd);
+    if (amount <= 0) return 0;
+    this.addChips(id, amount);
+    return amount;
   }
 
   // --- LUMEN: the cashable token (server-authoritative, like `credits`) -------

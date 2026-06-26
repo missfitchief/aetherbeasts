@@ -29,10 +29,11 @@ import {
   toQuestView,
   wagerPayout,
   STAKED_PVP_TIERS,
+  CHIP_WAGER_TIERS,
   type WagerCurrency,
 } from '@aether/shared';
 import { Store, publicProfile } from './store.js';
-import { LUMEN_ENABLED, STAKED_PVP_ENABLED, WAGER_HOLD_MS } from './config.js';
+import { LUMEN_ENABLED, STAKED_PVP_ENABLED, CHIPS_ENABLED, WAGER_HOLD_MS } from './config.js';
 
 interface MatchSide {
   id: string; // playerId
@@ -101,7 +102,13 @@ export class MatchManager {
       this.err(socketId, 'LUMEN wagers are not open yet.');
       return;
     }
-    const stake = currency === 'lumen' ? clampLumenStake(stakeRaw) : clampStake(stakeRaw);
+    if (currency === 'chips' && !CHIPS_ENABLED) {
+      this.err(socketId, 'Chip wagers are not open yet.');
+      return;
+    }
+    const stake = currency === 'lumen' ? clampLumenStake(stakeRaw)
+      : currency === 'chips' ? clampChipStake(stakeRaw)
+        : clampStake(stakeRaw);
     const party = this.battleParty(playerId);
     if (!party) {
       this.err(socketId, 'Your team is empty — catch or summon a beast before battling.');
@@ -145,7 +152,7 @@ export class MatchManager {
     }
     const stake = aw.stake;
     const currency = aw.currency;
-    const cur = currency === 'lumen' ? 'LUMEN' : 'Battle Credits';
+    const cur = currency === 'lumen' ? 'LUMEN' : currency === 'chips' ? 'Chips' : 'Battle Credits';
     // Escrow the stake from BOTH players (server-authoritative). Roll back on failure.
     if (!this.debit(currency, aw.playerId, stake)) {
       this.err(aw.socketId, `Not enough ${cur}.`);
@@ -291,8 +298,8 @@ export class MatchManager {
     match.done = true;
     const outcome = match.state.outcome as Outcome; // 'win' (A) | 'lose' (B) | 'draw'
     const stake = match.stake;
-    // LUMEN wagers take a BURNED rake off the winner's pot; credits pay the full pot.
-    const winnerTakes = match.currency === 'lumen' ? wagerPayout(stake).toWinner : stake * 2;
+    // LUMEN + CHIP wagers take a BURNED rake off the winner's pot; credits pay the full pot.
+    const winnerTakes = (match.currency === 'lumen' || match.currency === 'chips') ? wagerPayout(stake).toWinner : stake * 2;
     const aRec = this.store.getById(match.a.id);
     const bRec = this.store.getById(match.b.id);
     const aRating = aRec?.rating ?? 1000;
@@ -343,7 +350,7 @@ export class MatchManager {
 
   private sendOver(match: Match, ms: MatchSide, outcome: Outcome, gain: number) {
     const rec = this.store.getById(ms.id);
-    const unit = match.currency === 'lumen' ? 'LUMEN' : 'Battle Credits';
+    const unit = match.currency === 'lumen' ? 'LUMEN' : match.currency === 'chips' ? 'Chips' : 'Battle Credits';
     const message =
       outcome === 'win'
         ? `Victory! You won the pot — +${gain} ${unit}.`
@@ -357,6 +364,7 @@ export class MatchManager {
         potAwarded: gain,
         credits: rec?.credits ?? 0,
         lumen: rec?.lumen ?? 0,
+        chips: rec?.chips ?? 0,
         rating: rec?.rating ?? 1000,
         currency: match.currency,
         message,
@@ -432,13 +440,16 @@ export class MatchManager {
 
   /** Debit a wager stake in the match's currency. Returns false if underfunded. */
   private debit(currency: WagerCurrency, id: string, amount: number): boolean {
-    return currency === 'lumen' ? this.store.spendLumen(id, amount) : this.store.escrow(id, amount);
+    if (currency === 'lumen') return this.store.spendLumen(id, amount);
+    if (currency === 'chips') return this.store.spendChips(id, amount);
+    return this.store.escrow(id, amount);
   }
   /** Credit a payout/refund in the match's currency. `holdMs` delays redeemability of LUMEN
    *  winnings (anti-laundering); refunds pass 0 (you get your own stake back immediately). */
   private credit(currency: WagerCurrency, id: string, amount: number, holdMs = 0): void {
     if (amount <= 0) return;
     if (currency === 'lumen') this.store.grantLumen(id, amount, 'wager', holdMs);
+    else if (currency === 'chips') this.store.addChips(id, amount); // chips are solvent by construction — no hold
     else this.store.award(id, amount);
   }
 
@@ -595,6 +606,12 @@ function clampStake(stake?: number): number {
 function clampLumenStake(stake?: number): number {
   const n = Math.round(Number(stake));
   return (STAKED_PVP_TIERS as readonly number[]).includes(n) ? n : STAKED_PVP_TIERS[0];
+}
+
+/** A CHIP wager must be one of the fixed chip tiers. */
+function clampChipStake(stake?: number): number {
+  const n = Math.round(Number(stake));
+  return (CHIP_WAGER_TIERS as readonly number[]).includes(n) ? n : CHIP_WAGER_TIERS[0];
 }
 
 /** Canonical outcome (side A's perspective) -> the given side's perspective. */

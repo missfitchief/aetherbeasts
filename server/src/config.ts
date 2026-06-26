@@ -56,6 +56,12 @@ export const EXCHANGE_ENABLED = process.env.EXCHANGE_ENABLED === 'true' && LUMEN
  *  LUMEN emission on. Self-funding (winner takes the loser's stake minus a burned rake);
  *  does NOT touch the Rewards Pool. Enable deliberately after a red-team audit + counsel. */
 export const STAKED_PVP_ENABLED = process.env.STAKED_PVP_ENABLED === 'true' && LUMEN_ENABLED;
+/** Wager CHIPS — the buy-in/cash-out casino balance ($AETHER deposit -> chips -> PvP wager ->
+ *  $AETHER cash-out). Real-money gambling, HARD kill-switch default OFF. Requires on-chain
+ *  summons (a treasury to deposit into + a payout signer). Solvent by construction (chips are
+ *  only minted by a deposit or won from another player's stake; the cash-out is treasury-backed,
+ *  NOT the Rewards Pool). The live payout signer is a deliberate operator step (see payout.ts). */
+export const CHIPS_ENABLED = process.env.CHIPS_ENABLED === 'true' && ONCHAIN_SUMMON_ENABLED;
 /** Anti-laundering hold (DAYS) on LUMEN WON in a wager: winnings aren't REDEEMABLE until it
  *  elapses (still spendable / re-wagerable). Default 0 (no hold). SET > 0 before enabling staked
  *  PvP — otherwise a sybil ring can instantly funnel many feeder accounts' LUMEN into one gated

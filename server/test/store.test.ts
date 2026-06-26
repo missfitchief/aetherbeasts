@@ -149,3 +149,17 @@ assert(store.claimExpedition(EX.id, exNow + 3_600_000) === null, 'nothing to cla
 assert(store.startExpedition(EX.id, 'forage', exNow + 3_600_000) === true, 'a new run can start after claiming');
 
 console.log('✅ expedition tests passed');
+
+// --- Wager CHIPS: bought-in casino balance (separate from faucet LUMEN) -----
+const CH = store.createWallet('WALLET_CHIPS');
+assert(store.getChips(CH.id) === 0, 'new account holds no chips');
+assert(store.buyChips(CH.id, 10) === 1000, 'a $10 deposit mints 1000 chips (peg $0.01)');
+assert(store.getChips(CH.id) === 1000, 'bought chips are credited');
+assert(store.spendChips(CH.id, 500) === true, 'a wager ante debits chips');
+assert(store.getChips(CH.id) === 500, 'chips debited');
+assert(store.spendChips(CH.id, 999) === false, 'cannot ante more chips than held');
+store.addChips(CH.id, 900); // won a 500-stake pot (1000) minus the 10% burned rake = 900
+assert(store.getChips(CH.id) === 1400, 'wager winnings are credited');
+assert(store.getLumen(CH.id) === 0, 'chips never touch the faucet LUMEN balance');
+
+console.log('✅ chip wager balance tests passed');
