@@ -294,6 +294,35 @@ function bind(socket: Socket) {
     socket.emit('login:claimed', { day: res.day, reward: res.reward, creature: granted, view: toQuestView(qs, now) });
   });
 
+  // --- Expeditions: idle / passive PvE income (server-authoritative timer) -----
+  socket.on('expedition:get', () => {
+    const id = pid();
+    if (id) socket.emit('expedition:state', { active: store.getExpeditionRun(id) });
+  });
+
+  socket.on('expedition:start', (p: { tier?: string }) => {
+    const id = pid();
+    if (!id || !p || typeof p.tier !== 'string') return;
+    store.startExpedition(id, p.tier, Date.now());
+    socket.emit('expedition:state', { active: store.getExpeditionRun(id) });
+  });
+
+  socket.on('expedition:claim', () => {
+    const id = pid();
+    if (!id) return;
+    const rec = store.getById(id);
+    if (!rec || !rec.save) return;
+    const reward = store.claimExpedition(id, Date.now()); // consumes the run + grants LUMEN (gated)
+    if (!reward) return socket.emit('expedition:state', { active: store.getExpeditionRun(id) }); // not back yet / none
+    // GLINT (◈) lands in the client-owned save, server-authoritative — same path as quests.
+    rec.save.aether = (rec.save.aether ?? 0) + reward.glint;
+    rec.save.updatedAt = Math.max((rec.save.updatedAt ?? 0) + 1, Date.now());
+    store.saveProgress(id, rec.save);
+    socket.emit('profile:update', publicProfile(rec)); // reflects any LUMEN gain
+    socket.emit('expedition:claimed', { glint: reward.glint, lumen: reward.lumen, save: rec.save });
+    socket.emit('expedition:state', { active: null });
+  });
+
   // --- The Aether Exchange: LUMEN -> $AETHER cash-out (gated, server-authoritative) ---
   const DECIMALS_POW = Math.pow(10, AETHER_DECIMALS);
   const disabledQuote = (reason: string) => ({

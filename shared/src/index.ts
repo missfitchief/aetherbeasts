@@ -11,6 +11,7 @@ export { MOVES, getMove } from './data/moves.js';
 export { SPECIES, SPECIES_ORDER, STARTERS, getSpecies } from './data/species.js';
 export { ITEMS, SHOP_STOCK, getItem } from './data/items.js';
 export { ENCOUNTER_ZONES, scaledWildLevel, dailyBossOf, DAILY_BOSS_REWARD } from './data/encounters.js';
+export { EXPEDITIONS, getExpedition, expeditionMs, expeditionReward, type ExpeditionTier } from './data/expeditions.js';
 export { TRAINERS, getTrainer, trainersForZone, type Trainer, type TrainerMon } from './data/trainers.js';
 
 // Engine

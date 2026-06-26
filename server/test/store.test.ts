@@ -131,3 +131,21 @@ store.refundRedeem(RB.id, 50, rbnow, 0.45);
 assert(store.getRedeemedUsd(RB.id) === 0, 'refund rolls back the redeemed-USD accumulator');
 
 console.log('✅ rebate-gate accounting tests passed');
+
+// --- Expeditions: idle/passive income (server-authoritative timer) ---------
+const EX = store.createWallet('WALLET_EXPED');
+const exNow = Date.now() + 20 * DAY;
+assert(store.startExpedition(EX.id, 'scout', exNow) === false, 'cannot start an expedition with no team');
+store.saveProgress(EX.id, { ...base, party: [{ level: 10 }], aether: 0, updatedAt: exNow } as unknown as SaveData);
+assert(store.startExpedition(EX.id, 'nope', exNow) === false, 'unknown expedition tier is rejected');
+assert(store.startExpedition(EX.id, 'scout', exNow) === true, 'scout expedition starts once a team exists');
+assert(store.getExpeditionRun(EX.id)?.tier === 'scout', 'the active run is recorded');
+assert(store.startExpedition(EX.id, 'forage', exNow) === false, 'only one expedition runs at a time');
+assert(store.claimExpedition(EX.id, exNow + 60_000) === null, 'cannot claim before the 1h timer elapses');
+const exReward = store.claimExpedition(EX.id, exNow + 3_600_000);
+assert(exReward !== null && exReward.glint > 0, 'claiming after the timer pays a GLINT haul');
+assert(store.getExpeditionRun(EX.id) === null, 'the run clears after a successful claim');
+assert(store.claimExpedition(EX.id, exNow + 3_600_000) === null, 'nothing to claim once cleared');
+assert(store.startExpedition(EX.id, 'forage', exNow + 3_600_000) === true, 'a new run can start after claiming');
+
+console.log('✅ expedition tests passed');

@@ -71,8 +71,8 @@ export function dailyRemainingLumen(dailyUsed: number, cap = REDEEM_DAILY_CAP_LU
 
 /** LUMEN faucet base rates — earned by PLAYING, not by logging in (Season 1). */
 export const LUMEN_FAUCET = {
-  dailyQuestsCleared: 3,    // clear all 3 daily quests (gameplay tasks: battle/catch/etc.)
-  weeklyQuestsCleared: 20,  // clear all weeklies
+  dailyQuestsCleared: 5,    // clear all 3 daily quests (gameplay tasks: battle/catch/etc.)
+  weeklyQuestsCleared: 30,  // clear all weeklies
   rankedWinDailyCap: 10,    // at most 10 ranked wins/day earn LUMEN (amount scales with rank — see RANKED_WIN_LUMEN)
   dailyBoss: 2,             // beat the Daily Boss
   seasonPointMilestone: 10, // per 500 Season Points, claim-once each

@@ -14,6 +14,7 @@ import type {
   SummonReport,
   QuestView,
   QuestProgressEvent,
+  ExpeditionRun,
   ExchangeQuote,
   ExchangeResult,
   PresencePlayer,
@@ -75,6 +76,8 @@ interface NetState {
   stakedPvpEnabled: boolean;
   exchangeQuote: ExchangeQuote | null;
   exchangeBusy: boolean;
+  /** Active idle expedition (passive PvE income), or null when none is running. */
+  expedition: ExpeditionRun | null;
   setArena: (open: boolean) => void;
   setStake: (n: number) => void;
   setCurrency: (c: WagerCurrency) => void;
@@ -107,6 +110,7 @@ export const useNet = create<NetState>((set) => ({
   stakedPvpEnabled: false,
   exchangeQuote: null,
   exchangeBusy: false,
+  expedition: null,
   setArena: (open) => set({ arenaOpen: open }),
   setStake: (n) => set({ stake: n }),
   setCurrency: (c) => set({ currency: c }),
@@ -408,6 +412,14 @@ function wire(s: Socket) {
 
   // Quests: the authoritative board, and a claim's reward.
   s.on('quest:state', (v: QuestView) => useNet.setState({ questView: v }));
+  // Expeditions: authoritative active-run state + a claimed run's reward.
+  s.on('expedition:state', (p: { active: ExpeditionRun | null }) => useNet.setState({ expedition: p.active }));
+  s.on('expedition:claimed', (p: { glint: number; lumen: number; save: SaveData }) => {
+    // Server already granted + persisted; apply ◈ as a delta so we never clobber position.
+    useGame.getState().addAether(p.glint);
+    const l = p.lumen > 0 ? ` +${p.lumen} ◆` : '';
+    toast(`Expedition returned! +${p.glint} ◈${l}`);
+  });
   s.on('quest:claimed', (p: { questId: string; aether: number; points: number; streakBonus: number; save: SaveData; view: QuestView }) => {
     // Apply the ◈ reward as a delta (the server already persisted it) so we never
     // clobber unsaved mid-session state like the player's position.
@@ -541,6 +553,20 @@ export function emitQuestProgress(type: QuestProgressEvent, amount = 1) {
 /** Claim a completed quest's reward. */
 export function claimQuest(questId: string) {
   if (socket?.connected) socket.emit('quest:claim', { questId });
+}
+
+// --- expeditions (idle / passive PvE income) --------------------------------
+/** Ask the server for the active expedition run (when opening the panel). */
+export function requestExpedition() {
+  if (socket?.connected) socket.emit('expedition:get');
+}
+/** Send the team on an expedition tier. */
+export function startExpedition(tier: string) {
+  if (socket?.connected) socket.emit('expedition:start', { tier });
+}
+/** Claim a finished expedition's reward. */
+export function claimExpedition() {
+  if (socket?.connected) socket.emit('expedition:claim');
 }
 
 export function loginClaim() {

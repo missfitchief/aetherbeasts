@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
-import type { SaveData, PublicProfile, QuestState } from '@aether/shared';
-import { STARTING_CREDITS, freshQuestState, rollOver, MIN_HOLD_DAYS, LUMEN_FAUCET, rankedWinLumen, LUMEN_MILESTONES } from '@aether/shared';
+import type { SaveData, PublicProfile, QuestState, ExpeditionRun } from '@aether/shared';
+import { STARTING_CREDITS, freshQuestState, rollOver, MIN_HOLD_DAYS, LUMEN_FAUCET, rankedWinLumen, LUMEN_MILESTONES, getExpedition, expeditionMs, expeditionReward } from '@aether/shared';
 import { DATABASE_URL, REWARDS_POOL_SEED_BASE, LUMEN_ENABLED } from './config.js';
 
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // resume tokens expire after 30 days (sliding)
@@ -36,6 +36,7 @@ export interface PlayerRecord {
   lumenGrantKeys: string[]; // idempotency keys for once-per-period LUMEN faucets
   rankedLumen: { date: string; count: number }; // daily ranked-win LUMEN counter
   lumenSeasonTier: number; // highest Season-Point LUMEN milestone granted (monotonic — no re-mint)
+  expedition: ExpeditionRun | null; // active idle expedition (passive PvE income), or none
   createdAt: number;
   updatedAt: number;
 }
@@ -199,6 +200,7 @@ export class Store {
       lumenGrantKeys: [],
       rankedLumen: { date: '', count: 0 },
       lumenSeasonTier: 0,
+      expedition: null,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -253,6 +255,7 @@ export class Store {
       lumenGrantKeys: [],
       rankedLumen: { date: '', count: 0 },
       lumenSeasonTier: 0,
+      expedition: null,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -363,6 +366,36 @@ export class Store {
       rec.lastDailyTopUp = Date.now();
       this.queuePersist(rec);
     }
+  }
+
+  // --- Expeditions: idle / passive PvE income (server-authoritative timer) -----
+  getExpeditionRun(id: string): ExpeditionRun | null {
+    const r = this.byId.get(id); if (!r) return null;
+    return r.expedition ?? null;
+  }
+  /** Begin an idle expedition (one active at a time). Needs a non-empty party to send. */
+  startExpedition(id: string, tierId: string, now: number): boolean {
+    const r = this.byId.get(id); if (!r) return false;
+    if (r.expedition) return false;            // one run at a time
+    if (!getExpedition(tierId)) return false;  // unknown tier
+    if (!r.save?.party?.length) return false;  // nothing to send out
+    r.expedition = { tier: tierId, startedAt: now };
+    this.queuePersist(r);
+    return true;
+  }
+  /** Claim a finished expedition: grants LUMEN (gated) server-side and returns the
+   *  GLINT+LUMEN reward. Returns null if there's no run or it isn't back yet. */
+  claimExpedition(id: string, now: number): { glint: number; lumen: number } | null {
+    const r = this.byId.get(id); if (!r || !r.expedition) return null;
+    const tier = getExpedition(r.expedition.tier);
+    if (!tier) { r.expedition = null; this.queuePersist(r); return null; } // stale tier id -> clear
+    if (now - r.expedition.startedAt < expeditionMs(tier)) return null;    // still in the field
+    const top = r.save?.party?.length ? Math.max(...r.save.party.map((c) => c.level)) : 1;
+    const reward = expeditionReward(tier, top);
+    r.expedition = null;
+    if (LUMEN_ENABLED && reward.lumen > 0) this.grantLumen(id, reward.lumen, 'expedition');
+    this.queuePersist(r);
+    return reward;
   }
 
   // --- LUMEN: the cashable token (server-authoritative, like `credits`) -------

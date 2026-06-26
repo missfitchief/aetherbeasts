@@ -182,6 +182,14 @@ export interface QuestView {
  *  server, so spoofing saves at most one quest's ◈ (never unlimited / cashable). */
 export type QuestProgressEvent = 'battle_play' | 'battle_win' | 'catch' | 'summon' | 'evolve';
 
+// ---- expeditions (idle / passive PvE income) -------------------------------
+/** An active idle expedition. The server owns `startedAt`, so the timer can't be
+ *  fast-forwarded; the client renders the countdown from it. */
+export interface ExpeditionRun {
+  tier: string;      // ExpeditionTier id
+  startedAt: number; // server epoch ms when the run began
+}
+
 // ---- event maps (documentation + light typing aid) -------------------------
 export interface ServerToClient {
   'auth:ok': (p: AuthOk) => void;
@@ -207,6 +215,9 @@ export interface ServerToClient {
   'quest:state': (p: QuestView) => void;
   'quest:claimed': (p: { questId: string; aether: number; points: number; streakBonus: number; save: SaveData; view: QuestView }) => void;
   'login:claimed': (p: { day: number; reward: { aether?: number; itemId?: string; qty?: number; speciesId?: string; label: string }; creature?: Creature; view: QuestView }) => void;
+  // Expeditions: the authoritative active-run state, and a claimed run's reward.
+  'expedition:state': (p: { active: ExpeditionRun | null }) => void;
+  'expedition:claimed': (p: { glint: number; lumen: number; save: SaveData }) => void;
   'error': (p: { message: string }) => void;
 }
 
@@ -246,4 +257,8 @@ export interface ClientToServer {
   'quest:claim': (p: { questId: string }) => void;
   /** Ask the server for the current quest board (e.g. when opening the panel). */
   'quest:request': () => void;
+  /** Idle expeditions: fetch the active run, start a tier, or claim a finished run. */
+  'expedition:get': () => void;
+  'expedition:start': (p: { tier: string }) => void;
+  'expedition:claim': () => void;
 }
