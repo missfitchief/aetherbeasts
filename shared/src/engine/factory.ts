@@ -2,6 +2,7 @@ import { CORE_STATS, MAX_MOVES, type CoreStat } from '../constants.js';
 import type { Creature, IndividualValues, EffortValues } from '../types.js';
 import { getSpecies } from '../data/species.js';
 import { getMove } from '../data/moves.js';
+import { abilityForType } from '../data/abilities.js';
 import { maxHp, expFloorForLevel } from './formulas.js';
 import { randInt, pick, type RNG, defaultRng } from './rng.js';
 
@@ -9,11 +10,6 @@ const NATURES = [
   'Hardy', 'Bold', 'Brave', 'Calm', 'Gentle', 'Jolly', 'Lonely', 'Quirky',
   'Rash', 'Sassy', 'Timid', 'Docile', 'Modest', 'Naive', 'Quiet',
 ];
-
-const ABILITIES: Record<string, string> = {
-  normal: 'Adaptable', fire: 'Emberheart', water: 'Tidecaller', plant: 'Overgrowth',
-  air: 'Tailwind', magic: 'Arcane Flow', ground: 'Earthen Grit', ghost: 'Spectral',
-};
 
 let uidCounter = 0;
 function genUid(): string {
@@ -75,7 +71,8 @@ export function createCreature(speciesId: string, level: number, opts: CreateOpt
     ivs,
     evs,
     nature: pick(rng, NATURES),
-    ability: ABILITIES[species.types[0]],
+    ability: abilityForType(species.types[0]),
+    heldItem: null,
     currentHp: mhp,
     ailment: null,
     moves,

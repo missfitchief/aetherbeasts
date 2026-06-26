@@ -14,6 +14,17 @@ export interface AbilityInfo {
   desc: string;
 }
 
+/** The canonical ability NAME for each element type. SINGLE SOURCE OF TRUTH —
+ *  the factory assigns from this, and the server re-derives from it so PvP
+ *  abilities can't be spoofed by a client. */
+export const TYPE_ABILITY: Record<string, string> = {
+  normal: 'Adaptable', fire: 'Emberheart', water: 'Tidecaller', plant: 'Overgrowth',
+  air: 'Tailwind', magic: 'Arcane Flow', ground: 'Earthen Grit', ghost: 'Spectral',
+};
+
+/** Server-authoritative ability for a species' primary type. */
+export const abilityForType = (primaryType: string): string => TYPE_ABILITY[primaryType] ?? 'Adaptable';
+
 /** Keyed by the ability NAME set in the factory (one per element type). */
 export const ABILITY_INFO: Record<string, AbilityInfo> = {
   Emberheart:     { name: 'Emberheart',    desc: 'Fire moves hit 50% harder when HP drops below ⅓.' },

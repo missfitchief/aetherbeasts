@@ -1,6 +1,7 @@
 import {
   getSpecies, getMove, displayName, allStats, expProgress,
-  ivTotalPercent, CORE_STATS, STAT_TLA, TYPE_COLOR, dupesFor, MAX_STARS, abilityInfo, type Creature,
+  ivTotalPercent, CORE_STATS, STAT_TLA, TYPE_COLOR, dupesFor, MAX_STARS, abilityInfo,
+  getItem, addItem, removeItem, heldItemDesc, type Creature,
 } from '@aether/shared';
 import { useGame } from '../../state/store.js';
 import { Modal } from '../Panels.js';
@@ -31,6 +32,28 @@ export function SummaryPanel() {
   const dupes = dupesFor(save, c.uid);
   const back = () => openPanel(summary.source === 'party' ? 'party' : 'box');
 
+  // Held items — equip one from the bag (battle effect), or take it off.
+  const heldInBag = save.bag.filter((sl) => sl.qty > 0 && getItem(sl.itemId).category === 'held');
+  const findHere = (s: typeof save) => (summary.source === 'party' ? s.party : s.box).find((x) => x?.uid === c.uid);
+  const equipItem = (itemId: string) => {
+    useGame.getState().mutate((s) => {
+      const cc = findHere(s); if (!cc) return;
+      if (cc.heldItem) addItem(s, cc.heldItem, 1); // swap: return the old one to the bag
+      removeItem(s, itemId, 1);
+      cc.heldItem = itemId;
+    });
+    showToast(`${getItem(itemId).name} equipped.`);
+  };
+  const unequipItem = () => {
+    useGame.getState().mutate((s) => {
+      const cc = findHere(s); if (!cc?.heldItem) return;
+      addItem(s, cc.heldItem, 1);
+      cc.heldItem = null;
+    });
+    showToast('Held item removed.');
+  };
+  const heldBtn = { padding: '1px 7px', fontSize: 11, margin: 2 } as const;
+
   return (
     <Modal title={`${displayName(c)} · Lv ${c.level}`} onClose={closePanel}>
       <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
@@ -50,6 +73,21 @@ export function SummaryPanel() {
             <br />
             IV potential {ivTotalPercent(c)}%{c.shiny ? ' · ✨ Shiny' : ''}
             {stars > 0 ? <><br />Awakened +{stars * 8}% stats</> : null}
+          </div>
+          <div className="muted small" style={{ marginTop: 6 }}>
+            {c.heldItem ? (
+              <>
+                Holding <b style={{ color: '#ffd166' }}>{getItem(c.heldItem).name}</b>{' '}
+                <button className="btn" style={heldBtn} onClick={unequipItem}>Take off</button>
+                <br /><span style={{ color: '#8fb3d9', fontSize: 11 }}>{heldItemDesc(c.heldItem)}</span>
+              </>
+            ) : heldInBag.length ? (
+              <>Give a held item: {heldInBag.map((sl) => (
+                <button key={sl.itemId} className="btn" style={heldBtn} onClick={() => equipItem(sl.itemId)}>{getItem(sl.itemId).name}</button>
+              ))}</>
+            ) : (
+              <span>No held items — buy Bands &amp; Charms at the shop.</span>
+            )}
           </div>
           <div style={{ marginTop: 8 }}>
             <div className="muted small">EXP to next</div>

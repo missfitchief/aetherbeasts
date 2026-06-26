@@ -7,6 +7,8 @@ import {
   statOf,
   getMove,
   getSpecies,
+  abilityForType,
+  isHeldItem,
   CORE_STATS,
   type CoreStat,
   type BattleState,
@@ -552,7 +554,7 @@ function sanitizeCreature(c: unknown): Creature | null {
   try {
     const o = c as Partial<Creature> | null;
     if (!o || typeof o.speciesId !== 'string') return null;
-    getSpecies(o.speciesId); // throws on unknown species -> reject
+    const species = getSpecies(o.speciesId); // throws on unknown species -> reject
     const moves = Array.isArray(o.moves) ? o.moves.filter(knownMove).slice(0, 4) : [];
     if (moves.length === 0) return null;
     const creature: Creature = {
@@ -564,7 +566,10 @@ function sanitizeCreature(c: unknown): Creature | null {
       ivs: clampStatRecord<IndividualValues>(o.ivs, 0, 31),
       evs: clampStatRecord<EffortValues>(o.evs, 0, 255),
       nature: typeof o.nature === 'string' ? o.nature : 'Hardy',
-      ability: typeof o.ability === 'string' ? o.ability : '',
+      // Ability is server-authoritative (derived from the species type), so it
+      // can't be spoofed to the strongest one in a wagered PvP match.
+      ability: abilityForType(species.types[0]),
+      heldItem: isHeldItem(o.heldItem) ? o.heldItem : null, // only a real held item, else none
       currentHp: 1,
       ailment: null,
       moves,

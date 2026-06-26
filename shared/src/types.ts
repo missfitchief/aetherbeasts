@@ -73,7 +73,7 @@ export interface Species {
   desc: string;
 }
 
-export type ItemCategory = 'consumable' | 'catch' | 'key';
+export type ItemCategory = 'consumable' | 'catch' | 'key' | 'held';
 
 export interface ItemData {
   id: string;
@@ -119,6 +119,8 @@ export interface Creature {
   evs: EffortValues;
   nature: string;
   ability: string;
+  /** Equipped held item id (battle effect), or null/undefined for none. */
+  heldItem?: string | null;
   currentHp: number;
   ailment: Ailment | null;
   /** Move ids (≤ MAX_MOVES). */

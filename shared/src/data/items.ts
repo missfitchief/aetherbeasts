@@ -1,4 +1,5 @@
 import type { ItemData } from '../types.js';
+import { HELD_ITEMS } from './held.js';
 
 /** Item table, ported from the engine's `init_items` (consumables, catch stones, cures). */
 const RAW: ItemData[] = [
@@ -54,10 +55,13 @@ const RAW: ItemData[] = [
   },
 ];
 
-export const ITEMS: Record<string, ItemData> = Object.fromEntries(RAW.map((i) => [i.id, i]));
+export const ITEMS: Record<string, ItemData> = Object.fromEntries([...RAW, ...HELD_ITEMS].map((i) => [i.id, i]));
 
 /** Items stocked by the town shop (in display order). */
-export const SHOP_STOCK = ['pactstone', 'polishedstone', 'potion', 'hipotion', 'antidote', 'bandage', 'stimulant'];
+export const SHOP_STOCK = [
+  'pactstone', 'polishedstone', 'potion', 'hipotion', 'antidote', 'bandage', 'stimulant',
+  'emberband', 'aquaband', 'leafband', 'powerband', 'guardcharm',
+];
 
 export function getItem(id: string): ItemData {
   const i = ITEMS[id];

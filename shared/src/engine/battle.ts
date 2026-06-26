@@ -16,6 +16,7 @@ import { getSpecies } from '../data/species.js';
 import { getMove } from '../data/moves.js';
 import { getItem } from '../data/items.js';
 import { applyAbilityDamage } from '../data/abilities.js';
+import { applyHeldItemDamage } from '../data/held.js';
 import {
   statOf, buffFactor, damageForMove, accuracyHits, catchChance, catchWobbles, expYield,
 } from './formulas.js';
@@ -210,7 +211,14 @@ function resolveMove(state: BattleState, attacker: Side, moveIndex: number, rng:
       defenderHp: defSide.creature.currentHp,
       defenderMaxHp: maxHpOf(defSide.creature),
     });
-    dealt = ab.damage;
+    // Held items modify the post-ability damage (attacker boost + defender mitigation).
+    const hi = applyHeldItemDamage({
+      attackerItem: atkSide.creature.heldItem,
+      defenderItem: defSide.creature.heldItem,
+      moveType: move.type,
+      damage: ab.damage,
+    });
+    dealt = hi.damage;
     defSide.creature.currentHp = Math.max(0, defSide.creature.currentHp - dealt);
     out.push({
       type: 'damage', side: attacker === 'player' ? 'enemy' : 'player',
