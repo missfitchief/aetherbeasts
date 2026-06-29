@@ -206,7 +206,11 @@ export function catchWobbles(chance: number, caught: boolean, rng: RNG): number 
 export function expYield(defeated: Creature): number {
   const species = getSpecies(defeated.speciesId);
   const baseTotal = Object.values(species.base).reduce((a, b) => a + b, 0);
-  return Math.floor((baseTotal * defeated.level) / 4);
+  // Early kills (Lv<=12 — essentially all of Whisperwood) pay more EXP so a new tamer
+  // reaches their first evolution inside the opening session. Reverts to /4 at Lv13+,
+  // so every mid/late-game kill is mathematically unchanged.
+  const div = defeated.level <= 12 ? 2.5 : 4;
+  return Math.floor((baseTotal * defeated.level) / div);
 }
 
 /** Convenience: the resolved damage for an attacker using a move on a defender. */

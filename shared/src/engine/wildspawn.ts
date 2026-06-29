@@ -25,7 +25,10 @@ export function forestLevel(save: SaveData): number {
 /** Minutes between wild spawns — short early so new tamers catch fast, ramping a
  *  little with level but CAPPED at 5 min so the forest always stays busy to play. */
 export function wildIntervalMin(level: number): number {
-  return Math.round(Math.min(5, 2 + (clampLevel(level) - 1) * 0.85));
+  // Flatter early ramp: ~2 min through ~Lv3, ~3 min at Lv5, not reaching the 5-min
+  // ceiling until ~Lv8 (old curve hit 5 min by Lv4 — dead air right in the early
+  // catch→level→evolve flow). Still clamps to the SAME 5-min cap, so late game is unchanged.
+  return Math.round(Math.min(5, 1.5 + (clampLevel(level) - 1) * 0.45));
 }
 export function wildIntervalMs(level: number): number {
   return wildIntervalMin(level) * MS_PER_MIN;

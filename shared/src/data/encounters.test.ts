@@ -102,9 +102,9 @@ describe('Weekly Raid Boss', () => {
 describe('monster evolutions (from the pack)', () => {
   const LINES: [string, string, number][] = [
     ['grodent', 'ratssive', 16],
-    ['drachnid', 'charachne', 16], // pulled 20 -> 16 for the content arc
-    ['draquatic', 'leviocean', 16],
-    ['plaugspout', 'flowrath', 16],
+    ['drachnid', 'charachne', 13], // starters pulled to 13 — first evolution lands in session one
+    ['draquatic', 'leviocean', 13],
+    ['plaugspout', 'flowrath', 13],
     ['duvan', 'pidgreat', 21],
     ['jestar', 'cardemon', 22],
     ['spookshroom', 'wraithmanita', 22],

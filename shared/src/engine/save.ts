@@ -10,9 +10,10 @@ import type { RNG } from './rng.js';
 export const SAVE_VERSION = 11;
 const BOX_TOTAL = BOX_PAGE_SIZE * BOX_PAGES;
 
-/** New players start BROKE — no free summon currency. They catch a team with the starting
- *  Pact Stones (5 in the bag), earn GLINT by playing, or invest $AETHER to summon. */
-export const STARTING_AETHER = 0;
+/** Small GLINT head-start so the summon machine reads as a visible "almost there" goal
+ *  from minute one — still BELOW the cheapest pull (100 ◈), so no free summon and no
+ *  economy break; players earn the rest by playing or invest $AETHER to summon. */
+export const STARTING_AETHER = 40;
 
 export const SPAWN = { map: 'world', x: 23, y: 16, facing: 'down' as const };
 export const SHRINE = { map: 'world', x: 27, y: 9 };

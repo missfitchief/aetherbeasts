@@ -732,7 +732,7 @@ export class OverworldScene extends Phaser.Scene {
     const game = useGame.getState();
     if (result.outcome === 'caught') {
       game.addCreature(wild);
-      const reward = 10 + wild.level * 3;
+      const reward = 14 + wild.level * 4; // catching is the core early verb — reward it so the first 100◈ summon lands in session one
       game.addAether(reward);
       game.showToast(`${getSpecies(wild.speciesId).name} joined you!  +${reward} ◈ GLINT`);
     } else if (result.outcome === 'win') {
